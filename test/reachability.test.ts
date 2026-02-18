@@ -49,8 +49,15 @@ describe("computeReachability", () => {
     };
 
     const reachability = await computeReachability(tempDir, graph, ["src/index.ts"]);
-    expect(reachability.byNodeId.get("node_modules/express")?.level).toBe("import");
-    expect(reachability.byNodeId.get("node_modules/body-parser")?.level).toBe("transitive");
+    const express = reachability.byNodeId.get("node_modules/express");
+    const bodyParser = reachability.byNodeId.get("node_modules/body-parser");
+
+    expect(express?.level).toBe("import");
+    expect(express?.evidences[0].resolvedPackageNodeId).toBe("node_modules/express");
+    expect(bodyParser?.level).toBe("transitive");
+    expect(bodyParser?.evidences[0].viaNodeId).toBe("node_modules/express");
+    expect(bodyParser?.evidences[0].viaEdgeName).toBe("body-parser");
+    expect(bodyParser?.evidences[0].viaEdgeType).toBe("prod");
   });
 
   it("keeps unique traces when a node is reachable through multiple import seeds", async () => {

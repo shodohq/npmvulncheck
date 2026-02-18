@@ -29,11 +29,12 @@ describe("parseImportsFromFile", () => {
     );
 
     const imports = await parseImportsFromFile(file);
-    expect(imports.map((entry) => entry.specifier)).toEqual([
+    expect(imports.map((entry) => entry.specifier).filter((value): value is string => Boolean(value))).toEqual([
       "express",
       "@scope/pkg/sub",
       "lodash/map",
       "chalk"
     ]);
+    expect(imports.some((entry) => entry.unknown)).toBe(true);
   });
 });

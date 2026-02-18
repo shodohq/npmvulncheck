@@ -21,7 +21,11 @@ function packageKey(name: string, version: string): string {
   return `${name}@${version}`;
 }
 
-function dedupeInventory(graph: DepGraph, includeDev: boolean): {
+function dedupeInventory(
+  graph: DepGraph,
+  includeDev: boolean,
+  reachableNodeIds?: Set<string>
+): {
   inventory: Array<{ name: string; version: string }>;
   packageToNodes: Map<string, PackageNode[]>;
 } {
@@ -30,6 +34,9 @@ function dedupeInventory(graph: DepGraph, includeDev: boolean): {
 
   for (const node of graph.nodes.values()) {
     if (node.id === graph.rootId) {
+      continue;
+    }
+    if (reachableNodeIds && !reachableNodeIds.has(node.id)) {
       continue;
     }
     if (!includeNodeByDependencyType(node, includeDev)) {
@@ -237,7 +244,24 @@ export async function runScan(
       ? await computeReachability(opts.root, graph, opts.entries)
       : undefined;
 
-  const { inventory, packageToNodes } = dedupeInventory(graph, opts.includeDev);
+  let reachableNodeIds: Set<string> | undefined;
+  if (opts.mode === "source") {
+    const resolved = Array.from(reachability?.byNodeId.keys() ?? []);
+    const hasUnknownImports = Boolean(reachability?.hasUnknownImports);
+    const entriesScanned = reachability?.entriesScanned ?? 0;
+
+    if (entriesScanned === 0 || hasUnknownImports) {
+      // If source analysis has unresolved signals, fall back to full inventory to avoid false negatives.
+      reachableNodeIds = undefined;
+    } else if (resolved.length > 0) {
+      reachableNodeIds = new Set(resolved);
+    } else {
+      // No package imports were observed and analysis was complete.
+      reachableNodeIds = new Set();
+    }
+  }
+
+  const { inventory, packageToNodes } = dedupeInventory(graph, opts.includeDev, reachableNodeIds);
   const matchesByPackage = await vulnProvider.queryPackages(inventory);
   const ignorePolicy = await loadIgnorePolicy(opts.root, opts.ignoreFile);
 

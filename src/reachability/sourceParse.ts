@@ -2,19 +2,27 @@ import fs from "node:fs/promises";
 import ts from "typescript";
 
 export type ParsedImport = {
-  specifier: string;
+  specifier?: string;
   line: number;
   column: number;
   importText: string;
+  unknown?: boolean;
 };
 
-function addImport(out: ParsedImport[], sourceFile: ts.SourceFile, node: ts.Node, specifier: string): void {
+function addImport(
+  out: ParsedImport[],
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  specifier?: string,
+  unknown = false
+): void {
   const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
   out.push({
     specifier,
     line: line + 1,
     column: character + 1,
-    importText: node.getText(sourceFile)
+    importText: node.getText(sourceFile),
+    unknown
   });
 }
 
@@ -36,11 +44,15 @@ export async function parseImportsFromFile(filePath: string): Promise<ParsedImpo
       const moduleSpecifier = node.moduleSpecifier;
       if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
         addImport(imports, sourceFile, node, moduleSpecifier.text);
+      } else if (moduleSpecifier) {
+        addImport(imports, sourceFile, node, undefined, true);
       }
     } else if (ts.isCallExpression(node) && (isRequireCall(node) || isDynamicImport(node))) {
       const [firstArg] = node.arguments;
       if (firstArg && ts.isStringLiteral(firstArg)) {
         addImport(imports, sourceFile, node, firstArg.text);
+      } else if (firstArg) {
+        addImport(imports, sourceFile, node, undefined, true);
       }
     }
 

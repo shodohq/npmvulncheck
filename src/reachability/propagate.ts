@@ -9,6 +9,20 @@ type QueueItem = {
   trace: string[];
 };
 
+function evidenceKey(evidence: Evidence): string {
+  return [
+    evidence.file,
+    String(evidence.line),
+    String(evidence.column),
+    evidence.specifier,
+    evidence.importText,
+    evidence.resolvedPackageNodeId ?? "",
+    evidence.viaNodeId ?? "",
+    evidence.viaEdgeName ?? "",
+    evidence.viaEdgeType ?? ""
+  ].join("::");
+}
+
 function pushEvidence(map: Map<string, Evidence[]>, packageName: string, evidence: Evidence): void {
   const list = map.get(packageName);
   if (list) {
@@ -27,13 +41,20 @@ function pushTrace(record: ReachabilityRecord, trace: string[]): void {
   }
 }
 
+function pushUniqueEvidence(record: ReachabilityRecord, evidence: Evidence): void {
+  if (!record.evidences.some((current) => evidenceKey(current) === evidenceKey(evidence))) {
+    record.evidences.push(evidence);
+  }
+}
+
 async function collectSeedEvidences(
   projectRoot: string,
   entries: string[]
-): Promise<Map<string, Evidence[]>> {
+): Promise<{ packageEvidences: Map<string, Evidence[]>; hasUnknownImports: boolean }> {
   const queue = [...entries];
   const visited = new Set<string>();
   const packageEvidences = new Map<string, Evidence[]>();
+  let hasUnknownImports = false;
 
   while (queue.length > 0) {
     const file = queue.shift();
@@ -42,8 +63,20 @@ async function collectSeedEvidences(
     }
     visited.add(file);
 
-    const imports = await parseImportsFromFile(file).catch(() => []);
+    let imports = [] as Awaited<ReturnType<typeof parseImportsFromFile>>;
+    try {
+      imports = await parseImportsFromFile(file);
+    } catch {
+      hasUnknownImports = true;
+      continue;
+    }
+
     for (const parsedImport of imports) {
+      if (parsedImport.unknown || !parsedImport.specifier) {
+        hasUnknownImports = true;
+        continue;
+      }
+
       const packageName = normalizePackageSpecifier(parsedImport.specifier);
       if (packageName) {
         pushEvidence(packageEvidences, packageName, {
@@ -60,11 +93,13 @@ async function collectSeedEvidences(
       const localTarget = resolveLocalModule(file, parsedImport.specifier);
       if (localTarget) {
         queue.push(localTarget);
+      } else {
+        hasUnknownImports = true;
       }
     }
   }
 
-  return packageEvidences;
+  return { packageEvidences, hasUnknownImports };
 }
 
 export async function computeReachability(
@@ -73,7 +108,9 @@ export async function computeReachability(
   explicitEntries: string[]
 ): Promise<ReachabilityResult> {
   const entries = await discoverEntries(projectRoot, explicitEntries);
-  const evidencesByPackage = await collectSeedEvidences(projectRoot, entries);
+  const collected = await collectSeedEvidences(projectRoot, entries);
+  const evidencesByPackage = collected.packageEvidences;
+  let hasUnknownImports = collected.hasUnknownImports;
 
   const byNodeId = new Map<string, ReachabilityRecord>();
   const queue: QueueItem[] = [];
@@ -82,11 +119,13 @@ export async function computeReachability(
   for (const [packageName, evidences] of evidencesByPackage.entries()) {
     const nodeId = graph.resolvePackage(packageName);
     if (!nodeId) {
+      hasUnknownImports = true;
       continue;
     }
 
     const node = graph.nodes.get(nodeId);
     if (!node) {
+      hasUnknownImports = true;
       continue;
     }
 
@@ -97,12 +136,20 @@ export async function computeReachability(
 
     const record = byNodeId.get(nodeId);
     if (record) {
-      record.evidences.push(...evidences);
+      for (const evidence of evidences) {
+        pushUniqueEvidence(record, {
+          ...evidence,
+          resolvedPackageNodeId: nodeId
+        });
+      }
       pushTrace(record, trace);
     } else {
       byNodeId.set(nodeId, {
         level: "import",
-        evidences: [...evidences],
+        evidences: evidences.map((evidence) => ({
+          ...evidence,
+          resolvedPackageNodeId: nodeId
+        })),
         traces: [trace]
       });
       queue.push({ nodeId, trace });
@@ -127,11 +174,26 @@ export async function computeReachability(
       }
 
       const trace = [...current.trace, child.name];
+      const parentRecord = byNodeId.get(current.nodeId);
+      const parentEvidence = parentRecord?.evidences[0];
+      const viaEvidence: Evidence = {
+        kind: "import",
+        file: parentEvidence?.file ?? "(dependency-graph)",
+        line: parentEvidence?.line ?? 1,
+        column: parentEvidence?.column ?? 1,
+        specifier: edge.name,
+        importText: parentEvidence?.importText ?? `${current.nodeId} -> ${edge.name}`,
+        resolvedPackageNodeId: child.id,
+        viaNodeId: current.nodeId,
+        viaEdgeName: edge.name,
+        viaEdgeType: edge.type
+      };
+
       const existing = byNodeId.get(child.id);
       if (!existing) {
         byNodeId.set(child.id, {
           level: "transitive",
-          evidences: [],
+          evidences: [viaEvidence],
           traces: [trace]
         });
 
@@ -141,6 +203,7 @@ export async function computeReachability(
         continue;
       }
 
+      pushUniqueEvidence(existing, viaEvidence);
       pushTrace(existing, trace);
 
       if (!visited.has(child.id)) {
@@ -149,5 +212,9 @@ export async function computeReachability(
     }
   }
 
-  return { byNodeId };
+  return {
+    byNodeId,
+    entriesScanned: entries.length,
+    hasUnknownImports
+  };
 }

@@ -29,6 +29,10 @@ export type Evidence = {
   column: number;
   specifier: string;
   importText: string;
+  resolvedPackageNodeId?: string;
+  viaNodeId?: string;
+  viaEdgeName?: string;
+  viaEdgeType?: DepEdgeType;
 };
 
 export type Reachability = {
@@ -71,6 +75,8 @@ export type ReachabilityRecord = {
 
 export type ReachabilityResult = {
   byNodeId: Map<string, ReachabilityRecord>;
+  entriesScanned: number;
+  hasUnknownImports: boolean;
 };
 
 export type DepGraph = {
