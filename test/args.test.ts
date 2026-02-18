@@ -17,7 +17,10 @@ describe("resolveScanOptions", () => {
     const opts = resolveScanOptions(
       {
         show: ["traces,verbose"],
-        include: ["dev"]
+        include: ["dev"],
+        conditions: ["import,node", "custom"],
+        includeTypeImports: true,
+        explainResolve: true
       },
       "/tmp"
     );
@@ -25,5 +28,8 @@ describe("resolveScanOptions", () => {
     expect(opts.showTraces).toBe(true);
     expect(opts.showVerbose).toBe(true);
     expect(opts.includeDev).toBe(true);
+    expect(opts.conditions).toEqual(["import", "node", "custom"]);
+    expect(opts.includeTypeImports).toBe(true);
+    expect(opts.explainResolve).toBe(true);
   });
 });

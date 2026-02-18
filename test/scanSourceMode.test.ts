@@ -89,6 +89,8 @@ function makeOptions(root: string): ScanOptions {
     mode: "source",
     format: "json",
     entries: ["src/index.ts"],
+    conditions: [],
+    includeTypeImports: false,
     showTraces: false,
     showVerbose: false,
     includeDev: false,
@@ -152,5 +154,20 @@ describe("runScan source mode", () => {
       "GHSA-pkg-b",
       "GHSA-pkg-c"
     ]);
+  });
+
+  it("includes unresolved import diagnostics when explain-resolve is enabled", async () => {
+    const tempDir = await makeTempDir("npmvulncheck-scan-source-explain-");
+    const srcDir = path.join(tempDir, "src");
+    await fs.mkdir(srcDir, { recursive: true });
+    await fs.writeFile(path.join(srcDir, "index.ts"), 'import "pkg-missing";\n', "utf8");
+
+    const deps = new FakeDepsProvider(makeGraph());
+    const vulns = new FakeVulnProvider();
+    const result = await runScan({ ...makeOptions(tempDir), explainResolve: true }, deps, vulns, "0.1.0");
+
+    expect(result.meta.sourceAnalysis).toBeDefined();
+    expect(result.meta.sourceAnalysis?.unresolvedImports.length).toBeGreaterThan(0);
+    expect(result.meta.sourceAnalysis?.unresolvedImports[0].specifier).toBe("pkg-missing");
   });
 });

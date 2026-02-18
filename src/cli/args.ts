@@ -6,6 +6,9 @@ type RawScanOptions = {
   format?: string;
   root?: string;
   entry?: string[];
+  conditions?: string[];
+  includeTypeImports?: boolean;
+  explainResolve?: boolean;
   show?: string[];
   include?: string[];
   includeDev?: boolean;
@@ -66,6 +69,12 @@ function defaultExitCodeOn(format: OutputFormat): "none" | "findings" | "reachab
   return "none";
 }
 
+function parseConditions(values: string[] | undefined): string[] {
+  return Array.from(
+    new Set((values ?? []).flatMap((value) => value.split(",")).map((value) => value.trim()).filter(Boolean))
+  );
+}
+
 export function resolveScanOptions(raw: RawScanOptions, cwd: string): ScanOptions {
   const mode = parseMode(raw.mode);
   const format = parseFormat(raw.format);
@@ -76,6 +85,9 @@ export function resolveScanOptions(raw: RawScanOptions, cwd: string): ScanOption
     mode,
     format,
     entries: raw.entry ?? [],
+    conditions: parseConditions(raw.conditions),
+    includeTypeImports: Boolean(raw.includeTypeImports),
+    explainResolve: Boolean(raw.explainResolve),
     showTraces: show.showTraces,
     showVerbose: show.showVerbose,
     includeDev: parseIncludeDev(raw),

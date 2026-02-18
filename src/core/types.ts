@@ -1,6 +1,7 @@
 export type ScanMode = "lockfile" | "installed" | "source";
 export type OutputFormat = "text" | "json" | "sarif" | "openvex";
 export type DepEdgeType = "prod" | "dev" | "optional" | "peer";
+export type ImportKind = "esm-import" | "cjs-require" | "esm-dynamic-import";
 
 export type PackageNode = {
   id: string;
@@ -24,6 +25,7 @@ export type DependencyEdge = {
 
 export type Evidence = {
   kind: "import";
+  importKind?: ImportKind;
   file: string;
   line: number;
   column: number;
@@ -33,6 +35,16 @@ export type Evidence = {
   viaNodeId?: string;
   viaEdgeName?: string;
   viaEdgeType?: DepEdgeType;
+};
+
+export type UnresolvedImport = {
+  file: string;
+  line: number;
+  column: number;
+  importKind: ImportKind;
+  specifier: string;
+  importText: string;
+  candidates: string[];
 };
 
 export type Reachability = {
@@ -77,6 +89,7 @@ export type ReachabilityResult = {
   byNodeId: Map<string, ReachabilityRecord>;
   entriesScanned: number;
   hasUnknownImports: boolean;
+  unresolvedImports: UnresolvedImport[];
 };
 
 export type DepGraph = {
@@ -86,7 +99,18 @@ export type DepGraph = {
   edges: DependencyEdge[];
   edgesByFrom: Map<string, DependencyEdge[]>;
   rootDirectNodeIds: Set<string>;
-  resolvePackage: (name: string) => string | undefined;
+  resolvePackage: (
+    specifier: string,
+    fromFile?: string,
+    importKind?: ImportKind,
+    conditions?: string[]
+  ) => string | undefined | null;
+  resolveInternalImport?: (
+    specifier: string,
+    fromFile: string,
+    importKind: ImportKind,
+    conditions: string[]
+  ) => string | undefined;
 };
 
 export type OsvBatchMatch = {
@@ -136,6 +160,9 @@ export type ScanOptions = {
   mode: ScanMode;
   format: OutputFormat;
   entries: string[];
+  conditions: string[];
+  includeTypeImports: boolean;
+  explainResolve?: boolean;
   showTraces: boolean;
   showVerbose: boolean;
   includeDev: boolean;
@@ -157,6 +184,9 @@ export type ScanMeta = {
   db: {
     name: string;
     lastUpdated?: string;
+  };
+  sourceAnalysis?: {
+    unresolvedImports: UnresolvedImport[];
   };
   timestamp: string;
 };

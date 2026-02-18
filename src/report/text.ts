@@ -13,6 +13,33 @@ function formatTrace(trace: string[]): string {
   return trace.join(" -> ");
 }
 
+function appendUnresolvedImports(lines: string[], result: ScanResult, showVerbose: boolean): void {
+  const unresolvedImports = result.meta.sourceAnalysis?.unresolvedImports ?? [];
+  if (unresolvedImports.length === 0) {
+    return;
+  }
+
+  lines.push("");
+  lines.push("Unresolved imports:");
+
+  for (const unresolved of unresolvedImports) {
+    lines.push(
+      `  ${unresolved.file}:${unresolved.line}:${unresolved.column} [${unresolved.importKind}] ${unresolved.specifier}`
+    );
+
+    if (!showVerbose || unresolved.candidates.length === 0) {
+      continue;
+    }
+
+    for (const candidate of unresolved.candidates.slice(0, 5)) {
+      lines.push(`    candidate: ${candidate}`);
+    }
+    if (unresolved.candidates.length > 5) {
+      lines.push(`    ... ${unresolved.candidates.length - 5} more`);
+    }
+  }
+}
+
 export function renderText(result: ScanResult, showTraces: boolean, showVerbose: boolean): string {
   const lines: string[] = [];
 
@@ -29,6 +56,7 @@ export function renderText(result: ScanResult, showTraces: boolean, showVerbose:
 
   if (result.findings.length === 0) {
     lines.push("No vulnerabilities found.");
+    appendUnresolvedImports(lines, result, showVerbose);
     return `${lines.join("\n")}\n`;
   }
 
@@ -64,5 +92,6 @@ export function renderText(result: ScanResult, showTraces: boolean, showVerbose:
     lines.push("");
   }
 
+  appendUnresolvedImports(lines, result, showVerbose);
   return `${lines.join("\n")}\n`;
 }

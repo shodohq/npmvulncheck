@@ -241,7 +241,11 @@ export async function runScan(
 
   const reachability =
     opts.mode === "source"
-      ? await computeReachability(opts.root, graph, opts.entries)
+      ? await computeReachability(opts.root, graph, opts.entries, {
+          conditions: opts.conditions,
+          includeTypeImports: opts.includeTypeImports,
+          explainResolve: Boolean(opts.explainResolve)
+        })
       : undefined;
 
   let reachableNodeIds: Set<string> | undefined;
@@ -313,6 +317,12 @@ export async function runScan(
       name: vulnProvider.name,
       lastUpdated: calculateDbLastUpdated(findings)
     },
+    sourceAnalysis:
+      opts.mode === "source" && opts.explainResolve
+        ? {
+            unresolvedImports: reachability?.unresolvedImports ?? []
+          }
+        : undefined,
     timestamp: new Date().toISOString()
   };
 

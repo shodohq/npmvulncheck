@@ -61,6 +61,8 @@ function makeOptions(overrides: Partial<ScanOptions>): ScanOptions {
     mode: "source",
     format: "text",
     entries: [],
+    conditions: [],
+    includeTypeImports: false,
     showTraces: false,
     showVerbose: false,
     includeDev: false,
