@@ -175,6 +175,34 @@ npm test
 npm run build
 ```
 
+## CI/CD
+
+GitHub Actions workflows are configured in `.github/workflows`.
+
+- `ci.yml`: runs on every `push` and `pull_request` with Node.js `18`, `20`, and `22`
+  - Steps: `npm ci` -> `npm run lint` -> `npm test` -> `npm run build`
+- `cd.yml`: runs on `v*` tag push and publishes to npm after lint/test/build pass
+  - Includes a guard that checks `vX.Y.Z` tag matches `package.json` version
+  - Uses `npm publish --provenance --access public`
+
+### Required repository secret
+
+Set this secret in GitHub repository settings:
+
+- `NPM_TOKEN`: npm automation token with publish permission
+
+### Release flow
+
+```bash
+# 1) bump version
+npm version patch
+
+# 2) push commit and tag
+git push origin main --follow-tags
+```
+
+When the `v*` tag is pushed, the CD workflow publishes the package automatically.
+
 ## Contributing
 
 Issues and pull requests are welcome.
