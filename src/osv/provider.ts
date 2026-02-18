@@ -68,11 +68,35 @@ export class OsvProvider implements VulnerabilityProvider {
     }
 
     if (this.offline) {
+      const missing: string[] = [];
+      for (const state of states) {
+        const key = keyOf(state.name, state.version);
+        const cached = await this.cache.getQuery(state.name, state.version);
+        if (!cached) {
+          missing.push(key);
+          continue;
+        }
+        out.set(key, cached);
+      }
+
+      if (missing.length > 0) {
+        const preview = missing.slice(0, 5);
+        const suffix = missing.length > preview.length ? " ..." : "";
+        throw new Error(
+          `Offline mode: missing cached OSV query results for ${preview.join(", ")}${suffix}. ` +
+            "Run an online scan once to warm the cache."
+        );
+      }
       return out;
     }
 
     for (const group of chunk(states, BATCH_SIZE)) {
       await this.queryBatchWithPaging(group, out);
+    }
+
+    for (const state of states) {
+      const key = keyOf(state.name, state.version);
+      await this.cache.putQuery(state.name, state.version, out.get(key) ?? []);
     }
 
     return out;
@@ -84,11 +108,21 @@ export class OsvProvider implements VulnerabilityProvider {
       if (cached) {
         return cached;
       }
+
+      if (this.offline) {
+        const latestCached = await this.cache.getLatestById<OsvVulnerability>(id);
+        if (latestCached) {
+          return latestCached;
+        }
+        throw new Error(`Offline mode: vulnerability ${id} is not in cache.`);
+      }
     }
 
-    const latestCached = await this.cache.getLatestById<OsvVulnerability>(id);
-    if (latestCached && this.offline) {
-      return latestCached;
+    if (!modified) {
+      const latestCached = await this.cache.getLatestById<OsvVulnerability>(id);
+      if (latestCached) {
+        return latestCached;
+      }
     }
 
     if (this.offline) {

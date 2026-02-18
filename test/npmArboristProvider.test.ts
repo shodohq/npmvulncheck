@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { NpmArboristProvider } from "../src/deps/npmArborist";
-import { cleanupTempDirs, copyFixtureToTemp } from "./helpers";
+import { cleanupTempDirs, copyFixtureToTemp, makeTempDir } from "./helpers";
 
 const execFile = promisify(execFileCb);
 
@@ -28,6 +28,24 @@ describe("NpmArboristProvider", () => {
     await fs.rename(lockPath, shrinkwrapPath);
 
     expect(await provider.detect(fixture)).toBe(true);
+  });
+
+  it("allows installed-mode detection with node_modules even without lockfile", async () => {
+    const provider = new NpmArboristProvider();
+    const fixture = await makeTempDir("npmvulncheck-dep-installed-detect-");
+    await fs.mkdir(path.join(fixture, "node_modules"), { recursive: true });
+
+    expect(await provider.detect(fixture, "installed")).toBe(true);
+    expect(await provider.detect(fixture, "lockfile")).toBe(false);
+    expect(await provider.detect(fixture, "source")).toBe(false);
+  });
+
+  it("does not detect installed mode when only lockfile exists", async () => {
+    const provider = new NpmArboristProvider();
+    const fixture = await copyFixtureToTemp("dep-graph-local", "npmvulncheck-dep-installed-lock-only-");
+
+    expect(await provider.detect(fixture, "installed")).toBe(false);
+    await expect(provider.load(fixture, "installed")).rejects.toThrow("installed mode requires node_modules");
   });
 
   it("loads lockfile virtual graph with expected dependency classes", async () => {

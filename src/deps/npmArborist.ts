@@ -71,20 +71,38 @@ function toPackageNode(node: ArboristNode, projectRoot: string): PackageNode {
 }
 
 export class NpmArboristProvider implements DependencyGraphProvider {
-  async detect(projectRoot: string): Promise<boolean> {
+  async detect(projectRoot: string, mode: "lockfile" | "installed" | "source" = "lockfile"): Promise<boolean> {
     const lockPath = path.join(projectRoot, "package-lock.json");
     const shrinkwrapPath = path.join(projectRoot, "npm-shrinkwrap.json");
+    const nodeModulesPath = path.join(projectRoot, "node_modules");
 
-    const [lockStat, shrinkStat] = await Promise.all([
+    const [lockStat, shrinkStat, nodeModulesStat] = await Promise.all([
       fs.stat(lockPath).catch(() => null),
-      fs.stat(shrinkwrapPath).catch(() => null)
+      fs.stat(shrinkwrapPath).catch(() => null),
+      fs.stat(nodeModulesPath).catch(() => null)
     ]);
 
-    return Boolean(lockStat?.isFile() || shrinkStat?.isFile());
+    const hasLock = Boolean(lockStat?.isFile() || shrinkStat?.isFile());
+    const hasNodeModules = Boolean(nodeModulesStat?.isDirectory());
+
+    if (mode === "installed") {
+      return hasNodeModules;
+    }
+
+    return hasLock;
   }
 
   async load(projectRoot: string, mode: "lockfile" | "installed"): Promise<DepGraph> {
     const graph = makeEmptyDepGraph();
+
+    if (mode === "installed") {
+      const nodeModulesPath = path.join(projectRoot, "node_modules");
+      const stat = await fs.stat(nodeModulesPath).catch(() => null);
+      if (!stat?.isDirectory()) {
+        throw new Error(`installed mode requires node_modules at ${nodeModulesPath}`);
+      }
+    }
+
     const arb = new Arborist({ path: projectRoot });
     const rootNode: ArboristNode =
       mode === "installed"

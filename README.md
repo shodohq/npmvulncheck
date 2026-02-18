@@ -47,7 +47,7 @@ npmvulncheck explain GHSA-xxxx-xxxx-xxxx
 - `--fail-on all|reachable|direct`
 - `--ignore-file <path>`
 - `--cache-dir <dir>`
-- `--offline`
+- `--offline` (requires previously cached query/detail data; run one online scan first)
 
 ## Ignore policy format
 

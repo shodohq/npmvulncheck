@@ -165,17 +165,60 @@ describe("OsvProvider.queryPackages", () => {
     expect(results.get("pkg-c@1.0.0")?.map((entry) => entry.id)).toEqual(["GHSA-c1", "GHSA-c2"]);
   });
 
-  it("returns empty matches without API calls in offline mode", async () => {
+  it("reads query matches from cache in offline mode", async () => {
+    const onlineClient = new FakeClient();
+    onlineClient.queryResponses.push({
+      results: [{ vulns: [{ id: "GHSA-offline", modified: "2025-01-01T00:00:00Z" }] }]
+    });
+
+    const cacheDir = await makeTempDir("npmvulncheck-osv-cache-");
+    const cache = new OsvCache(cacheDir);
+    const onlineProvider = new OsvProvider(onlineClient as never, cache, false);
+    await onlineProvider.queryPackages([{ name: "pkg-a", version: "1.0.0" }]);
+
+    const offlineClient = new FakeClient();
+    const offlineProvider = new OsvProvider(offlineClient as never, new OsvCache(cacheDir), true);
+    const results = await offlineProvider.queryPackages([{ name: "pkg-a", version: "1.0.0" }]);
+
+    expect(results.get("pkg-a@1.0.0")).toEqual([{ id: "GHSA-offline", modified: "2025-01-01T00:00:00Z" }]);
+    expect(offlineClient.queryCalls).toEqual([]);
+  });
+
+  it("throws in offline mode when query cache is missing", async () => {
     const client = new FakeClient();
     const provider = await makeProvider(client, true);
-    const results = await provider.queryPackages([{ name: "pkg-a", version: "1.0.0" }]);
 
-    expect(results.get("pkg-a@1.0.0")).toEqual([]);
+    await expect(provider.queryPackages([{ name: "pkg-missing", version: "1.0.0" }])).rejects.toThrow(
+      "Offline mode: missing cached OSV query results"
+    );
     expect(client.queryCalls).toEqual([]);
   });
 });
 
 describe("OsvProvider.getVuln caching", () => {
+  it("prefers cached latest record when modified is not specified", async () => {
+    const client = new FakeClient();
+    client.vulnResponses.set("GHSA-cache", {
+      id: "GHSA-cache",
+      modified: "2025-02-01T00:00:00Z",
+      summary: "from-network"
+    });
+
+    const cacheDir = await makeTempDir("npmvulncheck-osv-cache-");
+    const cache = new OsvCache(cacheDir);
+    await cache.put("GHSA-cache", "2025-01-01T00:00:00Z", {
+      id: "GHSA-cache",
+      modified: "2025-01-01T00:00:00Z",
+      summary: "cached"
+    });
+
+    const provider = new OsvProvider(client as never, cache, false);
+    const vuln = await provider.getVuln("GHSA-cache");
+
+    expect(vuln.summary).toBe("cached");
+    expect(client.vulnCalls).toEqual([]);
+  });
+
   it("does not fetch details again when vulnId+modified exists in cache", async () => {
     const client = new FakeClient();
     const cacheDir = await makeTempDir("npmvulncheck-osv-cache-");

@@ -63,8 +63,14 @@ function renderExplainText(vuln: {
 async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
   const opts = resolveScanOptions(raw as never, process.cwd());
   const depsProvider = new NpmArboristProvider();
-  const detected = await depsProvider.detect(opts.root);
+  const detectMode = opts.mode === "installed" ? "installed" : "lockfile";
+  const detected = await depsProvider.detect(opts.root, detectMode);
   if (!detected) {
+    if (opts.mode === "installed") {
+      throw new Error(
+        `No installed npm dependency tree found in ${opts.root}. Expected node_modules/.`
+      );
+    }
     throw new Error(`No npm lockfile found in ${opts.root}. Expected package-lock.json or npm-shrinkwrap.json.`);
   }
 
@@ -132,7 +138,16 @@ program
   .option("--cache-dir <dir>", "OSV cache directory")
   .action(async (options) => {
     const cache = new OsvCache(options.cacheDir);
-    process.stdout.write(`npmvulncheck ${packageJson.version}\nosv cache: ${cache.dir}\n`);
+    const summary = await cache.getVulnSummary();
+    process.stdout.write(
+      [
+        `npmvulncheck ${packageJson.version}`,
+        "db: osv",
+        `db records: ${summary.count}`,
+        `db last-updated: ${summary.lastUpdated ?? "unknown"}`,
+        `osv cache: ${cache.dir}`
+      ].join("\n") + "\n"
+    );
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {
