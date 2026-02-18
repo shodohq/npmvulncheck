@@ -1,0 +1,9 @@
+{
+  "name": "workspace-split-resolve",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "a": "file:packages/a",
+    "b": "file:packages/b"
+  }
+}
