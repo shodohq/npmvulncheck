@@ -1,0 +1,28 @@
+{
+  "name": "npmvulncheck",
+  "version": "0.1.0",
+  "description": "govulncheck-inspired vulnerability scanner for npm projects",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "npmvulncheck": "dist/cli/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/main.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@npmcli/arborist": "^7.5.4",
+    "commander": "^13.1.0",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "vitest": "^3.0.8"
+  }
+}
