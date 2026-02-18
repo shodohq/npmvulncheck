@@ -3,7 +3,7 @@ import { ScanResult } from "../src/core/types";
 import { renderOpenVex } from "../src/report/openvex";
 import { renderSarif } from "../src/report/sarif";
 
-function makeResult(reachable: boolean): ScanResult {
+function makeResult(reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" }): ScanResult {
   return {
     meta: {
       tool: { name: "npmvulncheck", version: "0.1.0" },
@@ -30,12 +30,12 @@ function makeResult(reachable: boolean): ScanResult {
             },
             paths: [["root@1.0.0", "pkg@1.0.0"]],
             reachability: {
-              reachable,
-              level: reachable ? "import" : "unknown",
-              evidences: reachable
+              reachable: reachability.reachable,
+              level: reachability.level,
+              evidences: reachability.reachable
                 ? [{ kind: "import", file: "src/index.ts", line: 1, column: 1, specifier: "pkg", importText: 'import "pkg"' }]
                 : [],
-              traces: [[reachable ? "src/index.ts:1:1" : "unreachable", "pkg"]]
+              traces: [[reachability.reachable ? "src/index.ts:1:1" : "unreachable", "pkg"]]
             }
           }
         ],
@@ -48,7 +48,7 @@ function makeResult(reachable: boolean): ScanResult {
 
 describe("report renderers", () => {
   it("renders SARIF with required top-level fields", () => {
-    const parsed = JSON.parse(renderSarif(makeResult(true))) as {
+    const parsed = JSON.parse(renderSarif(makeResult({ reachable: true, level: "import" }))) as {
       version: string;
       runs: Array<{ tool: { driver: { rules: Array<{ id: string }> } }; results: unknown[] }>;
     };
@@ -60,12 +60,22 @@ describe("report renderers", () => {
   });
 
   it("renders OpenVEX not_affected with justification for unreachable findings", () => {
-    const parsed = JSON.parse(renderOpenVex(makeResult(false))) as {
+    const parsed = JSON.parse(renderOpenVex(makeResult({ reachable: false, level: "transitive" }))) as {
       statements: Array<{ status: string; justification?: string }>;
     };
 
     expect(parsed.statements).toHaveLength(1);
     expect(parsed.statements[0].status).toBe("not_affected");
     expect(parsed.statements[0].justification).toBe("vulnerable_code_not_in_execute_path");
+  });
+
+  it("renders OpenVEX under_investigation when reachability is unknown", () => {
+    const parsed = JSON.parse(renderOpenVex(makeResult({ reachable: false, level: "unknown" }))) as {
+      statements: Array<{ status: string; justification?: string }>;
+    };
+
+    expect(parsed.statements).toHaveLength(1);
+    expect(parsed.statements[0].status).toBe("under_investigation");
+    expect(parsed.statements[0].justification).toBeUndefined();
   });
 });

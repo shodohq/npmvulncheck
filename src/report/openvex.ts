@@ -1,7 +1,15 @@
 import { ScanResult } from "../core/types";
 
-function statusForAffected(reachable: boolean | undefined): "affected" | "not_affected" {
-  if (reachable === false) {
+function statusForAffected(
+  reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" } | undefined
+): "affected" | "not_affected" | "under_investigation" {
+  if (!reachability) {
+    return "affected";
+  }
+  if (reachability.level === "unknown") {
+    return "under_investigation";
+  }
+  if (reachability.reachable === false) {
     return "not_affected";
   }
   return "affected";
@@ -18,9 +26,9 @@ export function renderOpenVex(result: ScanResult): string {
           "@id": affected.package.purl ?? `pkg:npm/${encodeURIComponent(affected.package.name)}@${affected.package.version}`
         }
       ],
-      status: statusForAffected(affected.reachability?.reachable),
+      status: statusForAffected(affected.reachability),
       justification:
-        affected.reachability?.reachable === false
+        affected.reachability?.reachable === false && affected.reachability.level !== "unknown"
           ? "vulnerable_code_not_in_execute_path"
           : undefined,
       action_statement: affected.fix?.fixedVersion
