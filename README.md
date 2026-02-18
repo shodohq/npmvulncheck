@@ -1,75 +1,129 @@
 # npmvulncheck
 
-`npmvulncheck` is a govulncheck-inspired CLI for npm projects.
+`npmvulncheck` is a `govulncheck`-inspired vulnerability scanner for npm projects.
+It combines lockfile/installed dependency analysis with optional source reachability to help reduce noisy findings.
 
-## Implemented MVP
+## Why this tool
 
-- Dependency inventory from npm lockfile (`package-lock.json` / `npm-shrinkwrap.json`) via Arborist virtual tree
-- Installed tree mode via Arborist actual tree
-- Source reachability mode (JS/TS import/require/dynamic import parsing)
-- OSV query (`/v1/querybatch`) + detail fetch (`/v1/vulns/{id}`)
-- Vulnerability detail cache keyed by `vulnId + modified`
-- Output formats: `text`, `json`, `sarif`, `openvex`
-- `explain <VULN_ID>` command (cache-aware)
-- Exit-code policy compatible with govulncheck defaults, plus CI overrides
+- Uses OSV as the vulnerability source (`/v1/querybatch`, `/v1/vulns/{id}`)
+- Supports three scan modes: `lockfile`, `installed`, `source`
+- Understands JS/TS `import`, `require`, and literal dynamic `import(...)`
+- Supports `text`, `json`, `sarif`, and `openvex` outputs
+- CI-friendly exit code control (`--exit-code-on`, `--fail-on`, `--severity-threshold`)
+- Includes local cache support and offline scanning
 
-## Usage
+## Requirements
+
+- Node.js `>=18`
+- npm project
+- `package-lock.json` or `npm-shrinkwrap.json` for `lockfile`/`source` mode
+- `node_modules` installed for `installed` mode
+
+## Installation
+
+### From npm
 
 ```bash
-# lockfile scan
-npmvulncheck --mode lockfile --format text
+npm install -g npmvulncheck
+```
 
-# installed tree scan
-npmvulncheck --mode installed --format json
+Or run without global install:
 
-# source reachability scan
-npmvulncheck --mode source --entry src/index.ts --show traces --format text
+```bash
+npx npmvulncheck --help
+```
 
-# machine-readable output (always exit 0 by default)
+### From source
+
+```bash
+npm install
+npm run build
+npm link
+```
+
+## Quick start
+
+```bash
+# Default scan (lockfile + text)
+npmvulncheck
+
+# Installed tree scan
+npmvulncheck --mode installed --format text
+
+# Source reachability scan
+npmvulncheck --mode source --entry src/index.ts --show traces
+
+# Machine-readable output
 npmvulncheck --mode source --format json > findings.json
-
-# override exit behavior for CI
-npmvulncheck --format json --exit-code-on findings --fail-on reachable
-
-# vulnerability detail
-npmvulncheck explain GHSA-xxxx-xxxx-xxxx
 ```
 
-## Complex Example
+## Scan modes
 
-`examples/complex-unused-deps` is a sample project that intentionally mixes:
+| Mode        | Input graph                  | When to use                     | Notes |
+|-------------|------------------------------|----------------------------------|-------|
+| `lockfile`  | npm lockfile virtual tree     | Fast, deterministic CI scans     | Default mode |
+| `installed` | actual `node_modules` tree    | Match what is actually installed | Requires `npm install` |
+| `source`    | lockfile + source imports     | Prioritize reachable dependencies | Falls back to full inventory when imports are unresolved |
 
-- dependencies reachable from the entrypoint (`lodash`, `qs`, `axios`)
-- dependencies present in the lockfile but not reachable from the entrypoint (`minimist`, `serialize-javascript`)
-- non-literal dynamic import (`import(moduleName)`)
+### Entry points in `source` mode
+
+You can pass explicit entry files with repeatable `--entry`.
+If no valid entries are provided, entries are auto-discovered from:
+
+- `package.json` fields (`main`, `bin`, `exports`)
+- Common conventions (`src/index.ts`, `src/index.js`, `index.ts`, `index.js`, etc.)
+
+## Commands
 
 ```bash
-# dependency inventory based scan
-npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text
+# Scan
+npmvulncheck [options]
 
-# source reachability scan
-npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index.ts --show traces --format text
+# Show vulnerability detail
+npmvulncheck explain GHSA-xxxx-xxxx-xxxx
+
+# Show tool/db cache metadata
+npmvulncheck version
 ```
-
-In `source` mode, you can confirm that noise from non-reachable dependencies is reduced.
 
 ## Main options
 
 - `--mode lockfile|installed|source`
 - `--format text|json|sarif|openvex`
+- `--root <dir>`
 - `--entry <file>` (repeatable)
 - `--show traces|verbose`
-- `--include dev` / `--omit dev` (default omit dev)
-- `--exit-code-on none|findings|reachable-findings`
-- `--severity-threshold low|medium|high|critical`
-- `--fail-on all|reachable|direct`
-- `--ignore-file <path>`
+- `--include dev` / `--omit dev` (default: omit dev)
+- `--include-dev` / `--omit-dev`
 - `--cache-dir <dir>`
-- `--offline` (requires previously cached query/detail data; run one online scan first)
+- `--offline`
+- `--ignore-file <path>`
+- `--exit-code-on none|findings|reachable-findings`
+- `--fail-on all|reachable|direct`
+- `--severity-threshold low|medium|high|critical`
 
-## Ignore policy format
+## Exit codes and CI behavior
 
-`.npmvulncheck-ignore.json`
+Default behavior depends on output format:
+
+- `text`: default `--exit-code-on findings` (exit `1` when filtered findings exist)
+- `json`/`sarif`/`openvex`: default `--exit-code-on none` (exit `0` unless runtime error)
+
+Examples:
+
+```bash
+# Fail CI only for reachable vulnerabilities with severity >= high
+npmvulncheck \
+  --mode source \
+  --format json \
+  --exit-code-on reachable-findings \
+  --fail-on reachable \
+  --severity-threshold high
+```
+
+## Ignore policy
+
+Default file: `.npmvulncheck-ignore.json` at project root.
 
 ```json
 {
@@ -83,6 +137,35 @@ In `source` mode, you can confirm that noise from non-reachable dependencies is 
 }
 ```
 
+Notes:
+
+- Rules are matched by vulnerability `id`
+- Expired rules are ignored
+- Invalid `until` values are ignored
+
+## Cache and offline mode
+
+`npmvulncheck` caches vulnerability details and can run offline.
+
+```bash
+# Warm cache (online)
+npmvulncheck --mode lockfile
+
+# Reuse cache only
+npmvulncheck --mode lockfile --offline
+```
+
+Use `--cache-dir <dir>` to override the cache location.
+
+## Example project
+
+`examples/complex-unused-deps` demonstrates how `source` mode can reduce findings from dependencies that exist in the lockfile but are not reachable from your entrypoint.
+
+```bash
+npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text
+npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index.ts --show traces --format text
+```
+
 ## Development
 
 ```bash
@@ -91,3 +174,14 @@ npm run lint
 npm test
 npm run build
 ```
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+- Include tests for behavior changes where possible
+- Run `npm run lint` and `npm test` before submitting
+
+## License
+
+`AGPL-3.0-only` (see `LICENSE`)
