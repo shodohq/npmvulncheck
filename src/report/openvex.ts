@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { ScanResult } from "../core/types";
 
 function statusForAffected(
@@ -40,7 +41,7 @@ export function renderOpenVex(result: ScanResult): string {
 
   const openvex = {
     "@context": "https://openvex.dev/ns/v0.2.0",
-    "@id": `urn:uuid:${crypto.randomUUID()}`,
+    "@id": `urn:uuid:${randomUUID()}`,
     author: result.meta.tool.name,
     timestamp: result.meta.timestamp,
     version: 1,
