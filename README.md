@@ -35,6 +35,24 @@ npmvulncheck --format json --exit-code-on findings --fail-on reachable
 npmvulncheck explain GHSA-xxxx-xxxx-xxxx
 ```
 
+## Complex Example
+
+`examples/complex-unused-deps` is a sample project that intentionally mixes:
+
+- dependencies reachable from the entrypoint (`lodash`, `qs`, `axios`)
+- dependencies present in the lockfile but not reachable from the entrypoint (`minimist`, `serialize-javascript`)
+- non-literal dynamic import (`import(moduleName)`)
+
+```bash
+# dependency inventory based scan
+npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text
+
+# source reachability scan
+npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index.ts --show traces --format text
+```
+
+In `source` mode, you can confirm that noise from non-reachable dependencies is reduced.
+
 ## Main options
 
 - `--mode lockfile|installed|source`
