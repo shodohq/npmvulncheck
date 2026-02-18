@@ -8,6 +8,7 @@ It combines lockfile/installed dependency analysis with optional source reachabi
 - Uses OSV as the vulnerability source (`/v1/querybatch`, `/v1/vulns/{id}`)
 - Supports three scan modes: `lockfile`, `installed`, `source`
 - Understands JS/TS `import`, `require`, and literal dynamic `import(...)`
+- Resolves imports from each containing workspace/package context (not only root)
 - Supports `text`, `json`, `sarif`, and `openvex` outputs
 - CI-friendly exit code control (`--exit-code-on`, `--fail-on`, `--severity-threshold`)
 - Includes local cache support and offline scanning
@@ -92,6 +93,9 @@ npmvulncheck version
 - `--format text|json|sarif|openvex`
 - `--root <dir>`
 - `--entry <file>` (repeatable)
+- `--conditions <condition>` (repeatable; source-mode module conditions override)
+- `--include-type-imports` (include `import type` / `export type` in source reachability)
+- `--explain-resolve` (include unresolved import diagnostics and resolution candidates)
 - `--show traces|verbose`
 - `--include dev` / `--omit dev` (default: omit dev)
 - `--include-dev` / `--omit-dev`
