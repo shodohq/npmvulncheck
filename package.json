@@ -2,18 +2,25 @@
   "name": "npmvulncheck",
   "version": "0.1.0",
   "description": "govulncheck-inspired vulnerability scanner for npm projects",
+  "homepage": "https://github.com/shodohq/npmvulncheck#readme",
+  "bugs": {
+    "url": "https://github.com/shodohq/npmvulncheck/issues",
+    "email": "kousuke.takaki@shodohq.com"
+  },
   "license": "AGPL-3.0-only",
+  "author": "Kousuke Takaki <kousuke.takaki@shodohq.com>",
   "bin": {
     "npmvulncheck": "dist/cli/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shodohq/npmvulncheck.git"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/main.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
-  },
-  "engines": {
-    "node": ">=18"
   },
   "dependencies": {
     "@npmcli/arborist": "^7.5.4",
@@ -24,5 +31,8 @@
     "@types/node": "^22.13.10",
     "tsx": "^4.19.3",
     "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
