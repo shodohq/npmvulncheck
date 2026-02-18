@@ -11,39 +11,8 @@ import { renderJson } from "../report/json";
 import { renderOpenVex } from "../report/openvex";
 import { renderSarif } from "../report/sarif";
 import { renderText } from "../report/text";
-import { Finding, ScanOptions, ScanResult } from "../core/types";
-
-function isReachableFinding(finding: Finding): boolean {
-  return finding.affected.some((affected) => affected.reachability?.reachable);
-}
-
-function isDirectFinding(finding: Finding): boolean {
-  return finding.affected.some((affected) => affected.paths.some((path) => path.length <= 2));
-}
-
-function applyFailOnFilter(findings: Finding[], failOn: ScanOptions["failOn"]): Finding[] {
-  if (failOn === "reachable") {
-    return findings.filter((finding) => isReachableFinding(finding));
-  }
-  if (failOn === "direct") {
-    return findings.filter((finding) => isDirectFinding(finding));
-  }
-  return findings;
-}
-
-function determineExitCode(result: ScanResult, opts: ScanOptions): number {
-  if (opts.exitCodeOn === "none") {
-    return 0;
-  }
-
-  let findings = result.findings;
-  if (opts.exitCodeOn === "reachable-findings") {
-    findings = findings.filter((finding) => isReachableFinding(finding));
-  }
-
-  findings = applyFailOnFilter(findings, opts.failOn);
-  return findings.length > 0 ? 1 : 0;
-}
+import { ScanOptions, ScanResult } from "../core/types";
+import { determineExitCode } from "./exitCode";
 
 function renderResult(result: ScanResult, opts: ScanOptions): string {
   switch (opts.format) {

@@ -1,0 +1,16 @@
+{
+  "name": "dep-graph-local",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "consumer-a": "file:packages/consumer-a",
+    "prod-a": "file:packages/prod-a",
+    "peer-a": "file:packages/peer-a"
+  },
+  "devDependencies": {
+    "dev-a": "file:packages/dev-a"
+  },
+  "optionalDependencies": {
+    "opt-a": "file:packages/opt-a"
+  }
+}

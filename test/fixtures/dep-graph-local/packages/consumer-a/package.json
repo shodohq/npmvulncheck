@@ -1,0 +1,14 @@
+{
+  "name": "consumer-a",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "prod-a": "file:../prod-a"
+  },
+  "peerDependencies": {
+    "peer-a": "*"
+  },
+  "optionalDependencies": {
+    "opt-a": "file:../opt-a"
+  }
+}
