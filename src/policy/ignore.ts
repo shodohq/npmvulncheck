@@ -8,7 +8,7 @@ function isRuleActive(until?: string): boolean {
   }
   const untilDate = new Date(until);
   if (Number.isNaN(untilDate.getTime())) {
-    return true;
+    return false;
   }
   const now = new Date();
   return now <= untilDate;

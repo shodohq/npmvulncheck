@@ -1,17 +1,14 @@
 import { ScanResult } from "../core/types";
+import { findingHighestSeverityLevel } from "../policy/severity";
 
-function severityToSarifLevel(score?: string): "none" | "note" | "warning" | "error" {
-  if (!score) {
+function severityToSarifLevel(level?: "low" | "medium" | "high" | "critical"): "none" | "note" | "warning" | "error" {
+  if (!level) {
     return "warning";
   }
-  const normalized = score.toLowerCase();
-  if (normalized.includes("critical") || normalized.includes("9") || normalized.includes("10")) {
+  if (level === "critical" || level === "high") {
     return "error";
   }
-  if (normalized.includes("high") || normalized.includes("8") || normalized.includes("7")) {
-    return "error";
-  }
-  if (normalized.includes("medium") || normalized.includes("6") || normalized.includes("5") || normalized.includes("4")) {
+  if (level === "medium") {
     return "warning";
   }
   return "note";
@@ -29,7 +26,7 @@ export function renderSarif(result: ScanResult): string {
   const sarifResults = result.findings.flatMap((finding) =>
     finding.affected.map((affected) => ({
       ruleId: finding.vulnId,
-      level: severityToSarifLevel(finding.severity?.[0]?.score),
+      level: severityToSarifLevel(findingHighestSeverityLevel(finding)),
       message: {
         text: `${affected.package.name}@${affected.package.version}`
       },
