@@ -1,6 +1,6 @@
 {
   "name": "npmvulncheck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "govulncheck-inspired vulnerability scanner for npm projects",
   "homepage": "https://github.com/shodohq/npmvulncheck#readme",
   "bugs": {
