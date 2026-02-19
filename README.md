@@ -7,6 +7,7 @@ It combines lockfile/installed dependency analysis with optional source reachabi
 
 - Uses OSV as the vulnerability source (`/v1/querybatch`, `/v1/vulns/{id}`)
 - Supports three scan modes: `lockfile`, `installed`, `source`
+- Supports `package-lock.json` / `npm-shrinkwrap.json` / `pnpm-lock.yaml` / `yarn.lock` in lockfile-based modes
 - Understands JS/TS `import`, `require`, and literal dynamic `import(...)`
 - Resolves imports from each containing workspace/package context (not only root)
 - Supports `text`, `json`, `sarif`, and `openvex` outputs
@@ -16,9 +17,11 @@ It combines lockfile/installed dependency analysis with optional source reachabi
 ## Requirements
 
 - Node.js `>=18`
-- npm project
-- `package-lock.json` or `npm-shrinkwrap.json` for `lockfile`/`source` mode
-- `node_modules` installed for `installed` mode
+- Node.js project with one of:
+  - `package-lock.json` / `npm-shrinkwrap.json`
+  - `pnpm-lock.yaml`
+  - `yarn.lock`
+- `node_modules` installed for `installed` mode (npm tree only)
 
 ## Installation
 
@@ -62,9 +65,9 @@ npmvulncheck --mode source --format json > findings.json
 
 | Mode        | Input graph                  | When to use                     | Notes |
 |-------------|------------------------------|----------------------------------|-------|
-| `lockfile`  | npm lockfile virtual tree     | Fast, deterministic CI scans     | Default mode |
-| `installed` | actual `node_modules` tree    | Match what is actually installed | Requires `npm install` |
-| `source`    | lockfile + source imports     | Prioritize reachable dependencies | Falls back to full inventory when imports are unresolved |
+| `lockfile`  | lockfile dependency graph      | Fast, deterministic CI scans      | Supports npm/pnpm/yarn lockfiles |
+| `installed` | actual `node_modules` tree     | Match what is actually installed  | npm installed tree only |
+| `source`    | lockfile + source imports      | Prioritize reachable dependencies | Falls back to full inventory when imports are unresolved |
 
 ### Entry points in `source` mode
 
