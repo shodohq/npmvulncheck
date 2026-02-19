@@ -1,6 +1,7 @@
 # npmvulncheck
 
 [![CI](https://github.com/shodohq/npmvulncheck/actions/workflows/ci.yml/badge.svg)](https://github.com/shodohq/npmvulncheck/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/shodohq/npmvulncheck/badge)](https://scorecard.dev/viewer/?uri=github.com/shodohq/npmvulncheck)
 [![npm version](https://img.shields.io/npm/v/npmvulncheck)](https://www.npmjs.com/package/npmvulncheck)
 [![License](https://img.shields.io/npm/l/npmvulncheck)](LICENSE)
 
@@ -201,6 +202,7 @@ GitHub Actions workflows are configured in `.github/workflows`.
 
 - `ci.yml`: runs on every `push` and `pull_request` with Node.js `18`, `20`, and `22`
   - Steps: `npm ci` -> `npm run lint` -> `npm test` -> `npm run build`
+- `scorecards.yml`: runs OpenSSF Scorecard on `main` push and weekly schedule, then uploads SARIF to code scanning
 - `cd.yml`: runs on `v*` tag push and publishes to npm after lint/test/build pass
   - Includes a guard that checks `vX.Y.Z` tag matches `package.json` version
   - Uses `npm publish --provenance --access public`
