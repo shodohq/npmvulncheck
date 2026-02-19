@@ -1,7 +1,20 @@
 # npmvulncheck
 
+[![CI](https://github.com/shodohq/npmvulncheck/actions/workflows/ci.yml/badge.svg)](https://github.com/shodohq/npmvulncheck/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/npmvulncheck)](https://www.npmjs.com/package/npmvulncheck)
+[![License](https://img.shields.io/npm/l/npmvulncheck)](LICENSE)
+
 `npmvulncheck` is a `govulncheck`-inspired vulnerability scanner for npm projects.
 It combines lockfile/installed dependency analysis with optional source reachability to help reduce noisy findings.
+
+## Community quick links
+
+- [Contributing guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+- [Release notes](https://github.com/shodohq/npmvulncheck/releases)
+- [Issue tracker](https://github.com/shodohq/npmvulncheck/issues)
+- [OSS launch playbook](docs/launch-playbook.md)
 
 ## Why this tool
 
@@ -209,13 +222,15 @@ git push origin main --follow-tags
 ```
 
 When the `v*` tag is pushed, the CD workflow publishes the package automatically.
+After publish, create a GitHub Release with generated notes:
+
+```bash
+gh release create vX.Y.Z --generate-notes
+```
 
 ## Contributing
 
-Issues and pull requests are welcome.
-
-- Include tests for behavior changes where possible
-- Run `npm run lint` and `npm test` before submitting
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, PR checklist, and review expectations.
 
 ## License
 

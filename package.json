@@ -2,6 +2,16 @@
   "name": "npmvulncheck",
   "version": "0.1.1",
   "description": "govulncheck-inspired vulnerability scanner for npm projects",
+  "keywords": [
+    "npm",
+    "security",
+    "vulnerability",
+    "scanner",
+    "osv",
+    "supply-chain",
+    "cli",
+    "typescript"
+  ],
   "homepage": "https://github.com/shodohq/npmvulncheck#readme",
   "bugs": {
     "url": "https://github.com/shodohq/npmvulncheck/issues",

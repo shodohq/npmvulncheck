@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement for npmvulncheck
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion.
+        Describe the problem first, then the proposed behavior.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user problem are you trying to solve?
+      placeholder: "As a user, I want..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: CLI flags, output changes, or behavior details
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workaround or other options
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits and how
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
