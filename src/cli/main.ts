@@ -3,7 +3,7 @@ import { Command } from "commander";
 import packageJson from "../../package.json";
 import { resolveScanOptions, collect } from "./args";
 import { runScan } from "../core/scan";
-import { NpmArboristProvider } from "../deps/npmArborist";
+import { ProviderRegistry } from "../deps/registry";
 import { OsvCache } from "../osv/cache";
 import { OsvClient } from "../osv/client";
 import { OsvProvider } from "../osv/provider";
@@ -62,16 +62,27 @@ function renderExplainText(vuln: {
 
 async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
   const opts = resolveScanOptions(raw as never, process.cwd());
-  const depsProvider = new NpmArboristProvider();
+  const depsProvider = new ProviderRegistry();
   const detectMode = opts.mode === "installed" ? "installed" : "lockfile";
-  const detected = await depsProvider.detect(opts.root, detectMode);
+  const detected = await depsProvider.detectContext(opts.root, detectMode);
   if (!detected) {
     if (opts.mode === "installed") {
       throw new Error(
-        `No installed npm dependency tree found in ${opts.root}. Expected node_modules/.`
+        `No installed dependency tree found in ${opts.root}. Installed mode currently requires node_modules/.`
       );
     }
-    throw new Error(`No npm lockfile found in ${opts.root}. Expected package-lock.json or npm-shrinkwrap.json.`);
+    throw new Error(
+      `No supported lockfile found in ${opts.root}. Expected one of: pnpm-lock.yaml, yarn.lock, package-lock.json, npm-shrinkwrap.json.`
+    );
+  }
+
+  const warnings = detected.details?.warnings;
+  if (Array.isArray(warnings)) {
+    for (const warning of warnings) {
+      if (typeof warning === "string" && warning.length > 0) {
+        process.stderr.write(`Warning: ${warning}\n`);
+      }
+    }
   }
 
   const osvProvider = new OsvProvider(new OsvClient(), new OsvCache(opts.cacheDir), opts.offline);

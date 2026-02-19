@@ -36,6 +36,9 @@ function dedupeInventory(
     if (node.id === graph.rootId) {
       continue;
     }
+    if (node.source && node.source !== "registry") {
+      continue;
+    }
     if (reachableNodeIds && !reachableNodeIds.has(node.id)) {
       continue;
     }

@@ -82,12 +82,14 @@ function packageVersionFromNode(node: ArboristNode): string {
 function toPackageNode(node: ArboristNode, projectRoot: string): PackageNode {
   const name = packageNameFromNode(node, projectRoot);
   const version = packageVersionFromNode(node);
+  const source = node.location.includes("node_modules") ? "registry" : "workspace";
   return {
     id: node.location,
     name,
     version,
     location: node.location,
     purl: makePurl(name, version),
+    source,
     flags: {
       dev: node.dev,
       optional: node.optional,
@@ -456,6 +458,7 @@ export class NpmArboristProvider implements DependencyGraphProvider {
 
   async load(projectRoot: string, mode: "lockfile" | "installed"): Promise<DepGraph> {
     const graph = makeEmptyDepGraph();
+    graph.manager = "npm";
 
     if (mode === "installed") {
       const nodeModulesPath = path.join(projectRoot, "node_modules");
@@ -501,6 +504,7 @@ export class NpmArboristProvider implements DependencyGraphProvider {
     }
 
     graph.rootId = rootNode.location;
+    graph.importers?.set(".", rootNode.location);
     graph.edges = edges;
     graph.edgesByFrom = buildEdgesByFrom(edges);
 
@@ -613,6 +617,33 @@ export class NpmArboristProvider implements DependencyGraphProvider {
         seenTargets
       );
       return resolved ?? undefined;
+    };
+
+    graph.resolvePackageCandidates = (
+      specifier: string,
+      fromFile?: string,
+      importKind?: ImportKind,
+      conditions?: string[]
+    ): string[] => {
+      const direct = graph.resolvePackage(specifier, fromFile, importKind, conditions);
+      if (direct === null) {
+        return [];
+      }
+      if (direct) {
+        return [direct];
+      }
+
+      const normalized = normalizePackageSpecifier(specifier);
+      if (!normalized || normalized === specifier) {
+        return [];
+      }
+
+      const normalizedResolved = graph.resolvePackage(normalized, fromFile, importKind, conditions);
+      if (!normalizedResolved || normalizedResolved === null) {
+        return [];
+      }
+
+      return [normalizedResolved];
     };
 
     return graph;

@@ -67,28 +67,38 @@ function defaultConditions(importKind: ImportKind): string[] {
   return ["node", "import", "default"];
 }
 
-function resolvePackageNodeId(
+function resolvePackageNodeIds(
   graph: DepGraph,
   specifier: string,
   fromFile: string,
   importKind: ImportKind,
   conditions: string[]
-): string | undefined {
+): string[] {
+  if (graph.resolvePackageCandidates) {
+    const directCandidates = graph.resolvePackageCandidates(specifier, fromFile, importKind, conditions);
+    if (directCandidates.length > 0) {
+      return Array.from(new Set(directCandidates));
+    }
+  }
+
   const direct = graph.resolvePackage(specifier, fromFile, importKind, conditions);
   if (direct === null) {
-    return undefined;
+    return [];
   }
   if (direct) {
-    return direct;
+    return [direct];
   }
 
   const packageName = normalizePackageSpecifier(specifier);
   if (!packageName || packageName === specifier) {
-    return undefined;
+    return [];
   }
 
   const normalized = graph.resolvePackage(packageName, fromFile, importKind, conditions);
-  return normalized ?? undefined;
+  if (!normalized || normalized === null) {
+    return [];
+  }
+  return [normalized];
 }
 
 async function collectSeedEvidences(
@@ -174,17 +184,19 @@ async function collectSeedEvidences(
         continue;
       }
 
-      const packageNodeId = resolvePackageNodeId(graph, specifier, file, parsedImport.kind, conditions);
-      if (packageNodeId) {
-        pushEvidence(nodeEvidences, packageNodeId, {
-          kind: "import",
-          importKind: parsedImport.kind,
-          file: path.relative(projectRoot, file),
-          line: parsedImport.line,
-          column: parsedImport.column,
-          specifier,
-          importText: parsedImport.importText
-        });
+      const packageNodeIds = resolvePackageNodeIds(graph, specifier, file, parsedImport.kind, conditions);
+      if (packageNodeIds.length > 0) {
+        for (const packageNodeId of packageNodeIds) {
+          pushEvidence(nodeEvidences, packageNodeId, {
+            kind: "import",
+            importKind: parsedImport.kind,
+            file: path.relative(projectRoot, file),
+            line: parsedImport.line,
+            column: parsedImport.column,
+            specifier,
+            importText: parsedImport.importText
+          });
+        }
         continue;
       }
 

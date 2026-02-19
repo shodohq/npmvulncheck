@@ -31,11 +31,14 @@ export function clonePackageNode(node: PackageNode): PackageNode {
 export function makeEmptyDepGraph(): DepGraph {
   return {
     ecosystem: "npm",
+    manager: "npm",
     rootId: "",
     nodes: new Map(),
     edges: [],
     edgesByFrom: new Map(),
     rootDirectNodeIds: new Set(),
-    resolvePackage: () => undefined
+    importers: new Map(),
+    resolvePackage: () => undefined,
+    resolvePackageCandidates: () => []
   };
 }
