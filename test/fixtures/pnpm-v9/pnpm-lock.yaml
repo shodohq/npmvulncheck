@@ -1,0 +1,22 @@
+lockfileVersion: "9.0"
+
+importers:
+  .:
+    dependencies:
+      dep-b:
+        specifier: ^1.0.0
+        version: 1.0.0(peer-a@1.1.0)
+
+packages:
+  dep-b@1.0.0:
+    resolution:
+      integrity: sha512-dep-b
+  trans-b@2.0.0:
+    resolution:
+      integrity: sha512-trans-b
+
+snapshots:
+  dep-b@1.0.0(peer-a@1.1.0):
+    dependencies:
+      trans-b: 2.0.0
+  trans-b@2.0.0: {}

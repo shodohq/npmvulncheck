@@ -1,0 +1,17 @@
+__metadata:
+  version: 8
+  cacheKey: 10
+
+"dep-c@npm:^1.0.0":
+  version: 1.1.0
+  resolution: "dep-c@npm:1.1.0"
+  checksum: 10/dep-c-1
+  languageName: node
+  linkType: hard
+
+"dep-c@npm:^2.0.0":
+  version: 2.2.0
+  resolution: "dep-c@npm:2.2.0"
+  checksum: 10/dep-c-2
+  languageName: node
+  linkType: hard

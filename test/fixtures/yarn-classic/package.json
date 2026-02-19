@@ -1,0 +1,7 @@
+{
+  "name": "yarn-classic-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "dep-a": "^1.0.0"
+  }
+}

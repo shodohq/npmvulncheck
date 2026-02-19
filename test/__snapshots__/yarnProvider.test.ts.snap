@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`YarnLockfileProvider > detects and loads berry lockfile entries 1`] = `
+{
+  "edges": [
+    {
+      "from": "importer:.",
+      "name": "dep-b",
+      "to": "yarn:dep-b@npm:1.4.0",
+      "type": "prod",
+    },
+    {
+      "from": "yarn:dep-b@npm:1.4.0",
+      "name": "trans-b",
+      "to": "yarn:trans-b@npm:2.1.0",
+      "type": "prod",
+    },
+  ],
+  "importers": [
+    [
+      ".",
+      "importer:.",
+    ],
+  ],
+  "manager": "yarn",
+  "nodes": [
+    {
+      "id": "importer:.",
+      "location": ".",
+      "name": "yarn-berry-fixture",
+      "purl": undefined,
+      "source": "workspace",
+      "version": "1.0.0",
+    },
+    {
+      "id": "yarn:dep-b@npm:1.4.0",
+      "location": "dep-b@npm:^1.0.0",
+      "name": "dep-b",
+      "purl": "pkg:npm/dep-b@1.4.0",
+      "source": "registry",
+      "version": "1.4.0",
+    },
+    {
+      "id": "yarn:trans-b@npm:2.1.0",
+      "location": "trans-b@npm:^2.0.0",
+      "name": "trans-b",
+      "purl": "pkg:npm/trans-b@2.1.0",
+      "source": "registry",
+      "version": "2.1.0",
+    },
+  ],
+  "rootId": "importer:.",
+}
+`;
+
+exports[`YarnLockfileProvider > detects and loads classic lockfile entries 1`] = `
+{
+  "edges": [
+    {
+      "from": "importer:.",
+      "name": "dep-a",
+      "to": "yarn:dep-a@^1.0.0=>1.2.0",
+      "type": "prod",
+    },
+    {
+      "from": "yarn:dep-a@^1.0.0=>1.2.0",
+      "name": "trans-a",
+      "to": "yarn:trans-a@^2.0.0=>2.3.0",
+      "type": "prod",
+    },
+    {
+      "from": "yarn:dep-a@~1.0.0=>1.2.0",
+      "name": "trans-a",
+      "to": "yarn:trans-a@^2.0.0=>2.3.0",
+      "type": "prod",
+    },
+  ],
+  "importers": [
+    [
+      ".",
+      "importer:.",
+    ],
+  ],
+  "manager": "yarn",
+  "nodes": [
+    {
+      "id": "importer:.",
+      "location": ".",
+      "name": "yarn-classic-fixture",
+      "purl": undefined,
+      "source": "workspace",
+      "version": "1.0.0",
+    },
+    {
+      "id": "yarn:dep-a@^1.0.0=>1.2.0",
+      "location": "dep-a@^1.0.0",
+      "name": "dep-a",
+      "purl": "pkg:npm/dep-a@1.2.0",
+      "source": "registry",
+      "version": "1.2.0",
+    },
+    {
+      "id": "yarn:dep-a@~1.0.0=>1.2.0",
+      "location": "dep-a@~1.0.0",
+      "name": "dep-a",
+      "purl": "pkg:npm/dep-a@1.2.0",
+      "source": "registry",
+      "version": "1.2.0",
+    },
+    {
+      "id": "yarn:trans-a@^2.0.0=>2.3.0",
+      "location": "trans-a@^2.0.0",
+      "name": "trans-a",
+      "purl": "pkg:npm/trans-a@2.3.0",
+      "source": "registry",
+      "version": "2.3.0",
+    },
+  ],
+  "rootId": "importer:.",
+}
+`;

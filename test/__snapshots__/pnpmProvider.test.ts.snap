@@ -1,0 +1,135 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PnpmLockfileProvider > detects pnpm-lock.yaml and loads v5 importer/package graph 1`] = `
+{
+  "edges": [
+    {
+      "from": "importer:.",
+      "name": "local-a",
+      "to": "link:local-a@link%3Apackages%2Flocal-a",
+      "type": "prod",
+    },
+    {
+      "from": "importer:.",
+      "name": "dep-a",
+      "to": "pnpm:dep-a/1.0.0",
+      "type": "prod",
+    },
+    {
+      "from": "importer:.",
+      "name": "dev-a",
+      "to": "pnpm:dev-a/1.0.0",
+      "type": "dev",
+    },
+    {
+      "from": "pnpm:dep-a/1.0.0",
+      "name": "trans-a",
+      "to": "pnpm:trans-a/2.0.0",
+      "type": "prod",
+    },
+  ],
+  "importers": [
+    [
+      ".",
+      "importer:.",
+    ],
+  ],
+  "manager": "pnpm",
+  "nodes": [
+    {
+      "id": "importer:.",
+      "location": ".",
+      "name": "pnpm-v5-fixture",
+      "purl": undefined,
+      "source": "workspace",
+      "version": "1.0.0",
+    },
+    {
+      "id": "link:local-a@link%3Apackages%2Flocal-a",
+      "location": "link:packages/local-a",
+      "name": "local-a",
+      "purl": undefined,
+      "source": "link",
+      "version": "0.0.0",
+    },
+    {
+      "id": "pnpm:dep-a/1.0.0",
+      "location": "/dep-a/1.0.0",
+      "name": "dep-a",
+      "purl": "pkg:npm/dep-a@1.0.0",
+      "source": "registry",
+      "version": "1.0.0",
+    },
+    {
+      "id": "pnpm:dev-a/1.0.0",
+      "location": "/dev-a/1.0.0",
+      "name": "dev-a",
+      "purl": "pkg:npm/dev-a@1.0.0",
+      "source": "registry",
+      "version": "1.0.0",
+    },
+    {
+      "id": "pnpm:trans-a/2.0.0",
+      "location": "/trans-a/2.0.0",
+      "name": "trans-a",
+      "purl": "pkg:npm/trans-a@2.0.0",
+      "source": "registry",
+      "version": "2.0.0",
+    },
+  ],
+  "rootId": "importer:.",
+}
+`;
+
+exports[`PnpmLockfileProvider > loads v9 packages+snapshots graph 1`] = `
+{
+  "edges": [
+    {
+      "from": "importer:.",
+      "name": "dep-b",
+      "to": "pnpm:dep-b@1.0.0(peer-a@1.1.0)",
+      "type": "prod",
+    },
+    {
+      "from": "pnpm:dep-b@1.0.0(peer-a@1.1.0)",
+      "name": "trans-b",
+      "to": "pnpm:trans-b@2.0.0",
+      "type": "prod",
+    },
+  ],
+  "importers": [
+    [
+      ".",
+      "importer:.",
+    ],
+  ],
+  "manager": "pnpm",
+  "nodes": [
+    {
+      "id": "importer:.",
+      "location": ".",
+      "name": "pnpm-v9-fixture",
+      "purl": undefined,
+      "source": "workspace",
+      "version": "1.0.0",
+    },
+    {
+      "id": "pnpm:dep-b@1.0.0(peer-a@1.1.0)",
+      "location": "dep-b@1.0.0(peer-a@1.1.0)",
+      "name": "dep-b",
+      "purl": "pkg:npm/dep-b@1.0.0",
+      "source": "registry",
+      "version": "1.0.0",
+    },
+    {
+      "id": "pnpm:trans-b@2.0.0",
+      "location": "trans-b@2.0.0",
+      "name": "trans-b",
+      "purl": "pkg:npm/trans-b@2.0.0",
+      "source": "registry",
+      "version": "2.0.0",
+    },
+  ],
+  "rootId": "importer:.",
+}
+`;

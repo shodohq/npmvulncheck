@@ -1,0 +1,11 @@
+{
+  "name": "pnpm-v5-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "dep-a": "^1.0.0",
+    "local-a": "workspace:*"
+  },
+  "devDependencies": {
+    "dev-a": "^1.0.0"
+  }
+}

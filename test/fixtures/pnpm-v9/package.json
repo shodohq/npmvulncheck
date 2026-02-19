@@ -1,0 +1,7 @@
+{
+  "name": "pnpm-v9-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "dep-b": "^1.0.0"
+  }
+}

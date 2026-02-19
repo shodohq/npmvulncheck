@@ -1,0 +1,28 @@
+lockfileVersion: 5.4
+
+importers:
+  .:
+    specifiers:
+      dep-a: ^1.0.0
+      dev-a: ^1.0.0
+      local-a: workspace:*
+    dependencies:
+      dep-a: 1.0.0
+      local-a: link:packages/local-a
+    devDependencies:
+      dev-a: 1.0.0
+
+packages:
+  /dep-a/1.0.0:
+    resolution:
+      integrity: sha512-dep-a
+    dependencies:
+      trans-a: 2.0.0
+
+  /trans-a/2.0.0:
+    resolution:
+      integrity: sha512-trans-a
+
+  /dev-a/1.0.0:
+    resolution:
+      integrity: sha512-dev-a

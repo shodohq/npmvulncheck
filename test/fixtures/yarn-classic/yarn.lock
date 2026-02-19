@@ -1,0 +1,13 @@
+# yarn lockfile v1
+
+dep-a@^1.0.0, dep-a@~1.0.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/dep-a/-/dep-a-1.2.0.tgz#abc123"
+  integrity sha512-dep-a
+  dependencies:
+    trans-a "^2.0.0"
+
+trans-a@^2.0.0:
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/trans-a/-/trans-a-2.3.0.tgz#def123"
+  integrity sha512-trans-a

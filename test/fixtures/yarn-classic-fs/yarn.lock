@@ -1,0 +1,11 @@
+# yarn lockfile v1
+
+foo@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/foo/-/foo-1.0.1.tgz#111111"
+  integrity sha512-foo-1
+
+foo@^2.0.0:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/foo/-/foo-2.0.1.tgz#222222"
+  integrity sha512-foo-2

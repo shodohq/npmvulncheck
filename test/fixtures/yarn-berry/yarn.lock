@@ -1,0 +1,19 @@
+__metadata:
+  version: 8
+  cacheKey: 10
+
+"dep-b@npm:^1.0.0":
+  version: 1.4.0
+  resolution: "dep-b@npm:1.4.0"
+  dependencies:
+    trans-b: "npm:^2.0.0"
+  checksum: 10/dep-b
+  languageName: node
+  linkType: hard
+
+"trans-b@npm:^2.0.0":
+  version: 2.1.0
+  resolution: "trans-b@npm:2.1.0"
+  checksum: 10/trans-b
+  languageName: node
+  linkType: hard
