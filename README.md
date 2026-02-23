@@ -97,9 +97,9 @@ If no valid entries are provided, entries are auto-discovered from:
 # Scan
 npmvulncheck [options]
 
-# Guided remediation plan
-npmvulncheck fix --strategy auto
-npmvulncheck fix --strategy auto --apply --relock --verify
+# Scan with remediation planning strategy
+npmvulncheck --strategy auto
+npmvulncheck --strategy override --format sarif
 
 # Show vulnerability detail
 npmvulncheck explain GHSA-xxxx-xxxx-xxxx
@@ -112,6 +112,10 @@ npmvulncheck version
 
 - `--mode lockfile|installed|source`
 - `--format text|json|sarif|openvex`
+- `--strategy override|direct|in-place|auto` (default: `auto`)
+- `--scope global|by-parent`
+- `--upgrade-level patch|minor|major|any`
+- `--only-reachable` / `--include-unreachable` (remediation planning filter)
 - `--root <dir>`
 - `--entry <file>` (repeatable)
 - `--conditions <condition>` (repeatable; source-mode module conditions override)
@@ -127,43 +131,21 @@ npmvulncheck version
 - `--fail-on all|reachable|direct`
 - `--severity-threshold low|medium|high|critical`
 
-## Guided remediation (`fix`)
+## Integrated remediation planning
 
-Generate and apply remediation plans based on scan findings.
+Remediation planning runs as part of the default scan flow. The selected strategy controls how remediation actions are generated:
 
-```bash
-# dry-run (direct + transitive)
-npmvulncheck fix --strategy auto --format text
+- `override`: transitive dependency overrides
+- `direct`: direct dependency upgrades
+- `auto`: direct + transitive candidates
+- `in-place`: reserved
 
-# dry-run (direct only)
-npmvulncheck fix --strategy direct --format text
+Output mapping:
 
-# dry-run (transitive only)
-npmvulncheck fix --strategy override --format text
-
-# apply + relock + verify with source reachability filter
-npmvulncheck fix \
-  --strategy auto \
-  --mode source \
-  --entry src/index.ts \
-  --only-reachable \
-  --apply \
-  --relock \
-  --verify \
-  --no-introduce
-```
-
-Important options:
-
-- `--strategy override|direct|in-place|auto` (default: `auto`; `override`: transitive only, `direct`: direct deps only, `auto`: direct + transitive, `in-place`: reserved)
-- `--scope global|by-parent`
-- `--upgrade-level patch|minor|major|any`
-- `--apply`
-- `--relock`
-- `--verify`
-- `--no-introduce`
-- `--only-reachable` / `--include-unreachable`
-- `--format text|json|sarif` (`sarif`: emits scan-compatible SARIF results with remediation `fixes`)
+- `sarif`: remediation actions are emitted in each result's `fixes` property
+- `json`: remediation plan is emitted as top-level `remediation`, and per-affected notes are merged into `findings[].affected[].fix.note`
+- `openvex`: remediation actions are emitted in `statements[].action_statement`
+- `text`: remediation actions are shown in each finding's `fix:` line
 
 ## Exit codes and CI behavior
 
@@ -222,19 +204,16 @@ Use `--cache-dir <dir>` to override the cache location.
 
 ## Example projects
 
-### Guided remediation (`fix`)
+### Guided remediation planning
 
 `examples/guided-remediation` demonstrates transitive remediation flow (`override`) and can also be run with `auto`.
 
 ```bash
-# dry-run
-npmvulncheck fix --root examples/guided-remediation --strategy override --format text
+# override strategy
+npmvulncheck --root examples/guided-remediation --strategy override --format text
 
-# dry-run (auto: direct + transitive)
-npmvulncheck fix --root examples/guided-remediation --strategy auto --format text
-
-# apply + relock + verify
-npmvulncheck fix --root examples/guided-remediation --strategy override --apply --relock --verify --no-introduce --format text
+# auto strategy (direct + transitive)
+npmvulncheck --root examples/guided-remediation --strategy auto --format text
 ```
 
 ### Source reachability
@@ -246,7 +225,7 @@ npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text
 npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index.ts --show traces --format text
 ```
 
-Note: this fixture is for reachability scans, not remediation workflow coverage. `fix --strategy override` may produce a no-op plan when findings are direct dependencies; use `--strategy direct` or `--strategy auto` to include direct upgrades.
+Note: this fixture is for reachability scans, not remediation workflow coverage. `--strategy override` may produce a no-op plan when findings are direct dependencies; use `--strategy direct` or `--strategy auto` to include direct upgrades.
 
 ## Development
 

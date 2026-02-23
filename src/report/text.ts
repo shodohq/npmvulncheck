@@ -1,4 +1,6 @@
 import { Finding, ScanResult } from "../core/types";
+import { RemediationPlan } from "../remediation/types";
+import { buildRemediationActionLookup, remediationLookupKey } from "./remediation";
 
 function summarizeSeverity(finding: Finding): string {
   if (!finding.severity || finding.severity.length === 0) {
@@ -40,8 +42,14 @@ function appendUnresolvedImports(lines: string[], result: ScanResult, showVerbos
   }
 }
 
-export function renderText(result: ScanResult, showTraces: boolean, showVerbose: boolean): string {
+export function renderText(
+  result: ScanResult,
+  showTraces: boolean,
+  showVerbose: boolean,
+  remediationPlan?: RemediationPlan
+): string {
   const lines: string[] = [];
+  const actionsByFindingAndPackage = buildRemediationActionLookup(result, remediationPlan);
 
   lines.push(`Mode: ${result.meta.mode}`);
   lines.push(`Findings: ${result.findings.length}`);
@@ -79,7 +87,12 @@ export function renderText(result: ScanResult, showTraces: boolean, showVerbose:
         }
       }
 
-      if (affected.fix?.fixedVersion) {
+      const actions = actionsByFindingAndPackage.get(remediationLookupKey(finding.vulnId, affected.package.name));
+      if (actions && actions.length > 0) {
+        lines.push(`  fix: ${actions.map((action) => action.description).join(" ")}`);
+      } else if (affected.fix?.note) {
+        lines.push(`  fix: ${affected.fix.note}`);
+      } else if (affected.fix?.fixedVersion) {
         lines.push(`  fix: upgrade to >= ${affected.fix.fixedVersion}`);
       }
     }

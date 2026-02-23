@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ScanResult } from "../src/core/types";
+import { renderJson } from "../src/report/json";
 import { renderOpenVex } from "../src/report/openvex";
 import { renderSarif } from "../src/report/sarif";
 import { RemediationPlan } from "../src/remediation/types";
@@ -47,6 +48,43 @@ function makeResult(reachability: { reachable: boolean; level: "import" | "trans
   };
 }
 
+function makeRemediationPlan(): RemediationPlan {
+  return {
+    tool: "npmvulncheck",
+    strategy: "auto",
+    packageManager: "npm",
+    target: {
+      onlyReachable: false,
+      includeDev: false
+    },
+    operations: [
+      {
+        id: "op-manifest-direct-upgrade-1",
+        kind: "manifest-direct-upgrade",
+        file: "package.json",
+        depField: "dependencies",
+        package: "pkg",
+        fromRange: "1.0.0",
+        toRange: "1.2.0",
+        why: "Fixes GHSA-test"
+      }
+    ],
+    fixes: {
+      fixedVulnerabilities: ["GHSA-test"],
+      remainingVulnerabilities: []
+    },
+    summary: {
+      reasonedTopChoices: [
+        {
+          opId: "op-manifest-direct-upgrade-1",
+          rationale: "fixture",
+          risk: "low"
+        }
+      ]
+    }
+  };
+}
+
 describe("report renderers", () => {
   it("renders SARIF with required top-level fields", () => {
     const parsed = JSON.parse(renderSarif(makeResult({ reachable: true, level: "import" }))) as {
@@ -62,40 +100,7 @@ describe("report renderers", () => {
 
   it("renders SARIF fixes when a remediation plan is supplied", () => {
     const result = makeResult({ reachable: true, level: "import" });
-    const plan: RemediationPlan = {
-      tool: "npmvulncheck",
-      strategy: "auto",
-      packageManager: "npm",
-      target: {
-        onlyReachable: false,
-        includeDev: false
-      },
-      operations: [
-        {
-          id: "op-manifest-direct-upgrade-1",
-          kind: "manifest-direct-upgrade",
-          file: "package.json",
-          depField: "dependencies",
-          package: "pkg",
-          fromRange: "1.0.0",
-          toRange: "1.2.0",
-          why: "Fixes GHSA-test"
-        }
-      ],
-      fixes: {
-        fixedVulnerabilities: ["GHSA-test"],
-        remainingVulnerabilities: []
-      },
-      summary: {
-        reasonedTopChoices: [
-          {
-            opId: "op-manifest-direct-upgrade-1",
-            rationale: "fixture",
-            risk: "low"
-          }
-        ]
-      }
-    };
+    const plan = makeRemediationPlan();
 
     const parsed = JSON.parse(
       renderSarif(result, {
@@ -107,6 +112,33 @@ describe("report renderers", () => {
 
     expect(parsed.runs[0].results[0].fixes?.length).toBeGreaterThan(0);
     expect(parsed.runs[0].results[0].fixes?.[0]?.description.text).toContain("Upgrade direct dependency pkg");
+  });
+
+  it("renders JSON remediation payload and fix note when remediation plan is supplied", () => {
+    const result = makeResult({ reachable: true, level: "import" });
+    const parsed = JSON.parse(
+      renderJson(result, {
+        remediationPlan: makeRemediationPlan()
+      })
+    ) as {
+      remediation?: { strategy?: string };
+      findings: Array<{ affected: Array<{ fix?: { note?: string } }> }>;
+    };
+
+    expect(parsed.remediation?.strategy).toBe("auto");
+    expect(parsed.findings[0].affected[0].fix?.note).toContain("Upgrade direct dependency pkg");
+  });
+
+  it("renders OpenVEX action_statement from remediation plan when available", () => {
+    const parsed = JSON.parse(
+      renderOpenVex(makeResult({ reachable: true, level: "import" }), {
+        remediationPlan: makeRemediationPlan()
+      })
+    ) as {
+      statements: Array<{ action_statement?: string }>;
+    };
+
+    expect(parsed.statements[0].action_statement).toContain("Upgrade direct dependency pkg");
   });
 
   it("renders OpenVEX not_affected with justification for unreachable findings", () => {

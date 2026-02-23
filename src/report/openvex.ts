@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ScanResult } from "../core/types";
+import { RemediationPlan } from "../remediation/types";
+import { buildRemediationActionLookup, remediationLookupKey } from "./remediation";
 
 function statusForAffected(
   reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" } | undefined
@@ -16,27 +18,40 @@ function statusForAffected(
   return "affected";
 }
 
-export function renderOpenVex(result: ScanResult): string {
+export type RenderOpenVexOptions = {
+  remediationPlan?: RemediationPlan;
+};
+
+export function renderOpenVex(result: ScanResult, options: RenderOpenVexOptions = {}): string {
+  const actionsByFindingAndPackage = buildRemediationActionLookup(result, options.remediationPlan);
   const statements = result.findings.flatMap((finding) =>
-    finding.affected.map((affected) => ({
-      vulnerability: {
-        name: finding.vulnId
-      },
-      products: [
-        {
-          "@id": affected.package.purl ?? `pkg:npm/${encodeURIComponent(affected.package.name)}@${affected.package.version}`
-        }
-      ],
-      status: statusForAffected(affected.reachability),
-      justification:
-        affected.reachability?.reachable === false && affected.reachability.level !== "unknown"
-          ? "vulnerable_code_not_in_execute_path"
-          : undefined,
-      action_statement: affected.fix?.fixedVersion
-        ? `Upgrade ${affected.package.name} to >= ${affected.fix.fixedVersion}`
-        : undefined,
-      timestamp: result.meta.timestamp
-    }))
+    finding.affected.map((affected) => {
+      const actions = actionsByFindingAndPackage.get(remediationLookupKey(finding.vulnId, affected.package.name));
+      const actionStatement =
+        actions && actions.length > 0
+          ? actions.map((action) => action.description).join(" ")
+          : affected.fix?.fixedVersion
+            ? `Upgrade ${affected.package.name} to >= ${affected.fix.fixedVersion}`
+            : undefined;
+
+      return {
+        vulnerability: {
+          name: finding.vulnId
+        },
+        products: [
+          {
+            "@id": affected.package.purl ?? `pkg:npm/${encodeURIComponent(affected.package.name)}@${affected.package.version}`
+          }
+        ],
+        status: statusForAffected(affected.reachability),
+        justification:
+          affected.reachability?.reachable === false && affected.reachability.level !== "unknown"
+            ? "vulnerable_code_not_in_execute_path"
+            : undefined,
+        action_statement: actionStatement,
+        timestamp: result.meta.timestamp
+      };
+    })
   );
 
   const openvex = {
