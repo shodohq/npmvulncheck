@@ -8,6 +8,7 @@ export interface VulnerabilityProvider {
     pkgs: Array<{ name: string; version: string }>
   ): Promise<Map<string, OsvBatchMatch[]>>;
   getVuln(id: string, modified?: string): Promise<OsvVulnerability>;
+  listPackageVersions?(name: string): Promise<string[] | undefined>;
 }
 
 type QueryState = {
@@ -43,6 +44,7 @@ function chunk<T>(list: T[], size: number): T[][] {
 
 export class OsvProvider implements VulnerabilityProvider {
   readonly name = "osv";
+  private readonly packageVersionsCache = new Map<string, Promise<string[] | undefined>>();
 
   constructor(
     private readonly client: OsvClient,
@@ -133,6 +135,44 @@ export class OsvProvider implements VulnerabilityProvider {
     const cacheModified = modified ?? vuln.modified ?? "unknown";
     await this.cache.put(id, cacheModified, vuln);
     return vuln;
+  }
+
+  async listPackageVersions(name: string): Promise<string[] | undefined> {
+    const fromCache = this.packageVersionsCache.get(name);
+    if (fromCache) {
+      return fromCache;
+    }
+
+    const loaded = (async () => {
+      if (this.offline) {
+        return undefined;
+      }
+
+      const encodedName = encodeURIComponent(name);
+      const response = await fetch(`https://registry.npmjs.org/${encodedName}`, {
+        headers: {
+          accept: "application/vnd.npm.install-v1+json, application/json"
+        }
+      }).catch(() => undefined);
+
+      if (!response || !response.ok) {
+        return undefined;
+      }
+
+      const metadata = (await response.json().catch(() => undefined)) as
+        | {
+            versions?: Record<string, unknown>;
+          }
+        | undefined;
+      if (!metadata?.versions || typeof metadata.versions !== "object") {
+        return undefined;
+      }
+
+      return Object.keys(metadata.versions);
+    })();
+
+    this.packageVersionsCache.set(name, loaded);
+    return loaded;
   }
 
   private async queryBatchWithPaging(

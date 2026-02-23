@@ -207,7 +207,7 @@ export class ProviderRegistry implements DependencyGraphProvider {
       return installed
         ? {
             manager: "npm",
-            lockfilePath: path.join(projectRoot, "node_modules")
+            lockfilePath: path.join(projectRoot, "package-lock.json")
           }
         : null;
     }

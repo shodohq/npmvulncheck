@@ -56,4 +56,14 @@ describe("ProviderRegistry", () => {
     expect(Array.isArray(warnings)).toBe(true);
     expect((warnings as string[]).some((message) => message.includes("Multiple lockfiles detected"))).toBe(true);
   });
+
+  it("uses package-lock.json as rollback target in installed mode detect context", async () => {
+    const fixture = await copyFixtureToTemp("dep-graph-local", "npmvulncheck-provider-registry-installed-");
+    await fs.mkdir(path.join(fixture, "node_modules"), { recursive: true });
+
+    const registry = new ProviderRegistry();
+    const detected = await registry.detectContext(fixture, "installed");
+    expect(detected?.manager).toBe("npm");
+    expect(detected?.lockfilePath).toBe(path.join(fixture, "package-lock.json"));
+  });
 });

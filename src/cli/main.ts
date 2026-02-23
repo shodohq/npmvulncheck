@@ -13,6 +13,14 @@ import { renderSarif } from "../report/sarif";
 import { renderText } from "../report/text";
 import { ScanOptions, ScanResult } from "../core/types";
 import { determineExitCode } from "./exitCode";
+import { applyRemediationPlan, buildRemediationPlan } from "../remediation";
+import { renderRemediationText, renderVerifyOutcomeText } from "../remediation/render";
+import {
+  RemediationFormat,
+  RemediationScope,
+  RemediationStrategy,
+  UpgradeLevel
+} from "../remediation/types";
 
 function renderResult(result: ScanResult, opts: ScanOptions): string {
   switch (opts.format) {
@@ -60,11 +68,68 @@ function renderExplainText(vuln: {
   return `${lines.join("\n")}\n`;
 }
 
-async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
-  const opts = resolveScanOptions(raw as never, process.cwd());
-  const depsProvider = new ProviderRegistry();
+function parseFixStrategy(value: string | undefined): RemediationStrategy {
+  if (value === "override" || value === "direct" || value === "in-place" || value === "auto") {
+    return value;
+  }
+  return "override";
+}
+
+function parseFixScope(value: string | undefined): RemediationScope {
+  if (value === "global" || value === "by-parent") {
+    return value;
+  }
+  return "global";
+}
+
+function parseFixUpgradeLevel(value: string | undefined): UpgradeLevel {
+  if (value === "patch" || value === "minor" || value === "major" || value === "any") {
+    return value;
+  }
+  return "any";
+}
+
+function parseFixFormat(value: string | undefined): RemediationFormat {
+  if (value === "json") {
+    return "json";
+  }
+  return "text";
+}
+
+type FixCommandOptions = {
+  strategy?: string;
+  scope?: string;
+  upgradeLevel?: string;
+  format?: string;
+  apply?: boolean;
+  relock?: boolean;
+  verify?: boolean;
+  noIntroduce?: boolean;
+  rollbackOnFail?: boolean;
+  onlyReachable?: boolean;
+  includeUnreachable?: boolean;
+  mode?: string;
+  root?: string;
+  entry?: string[];
+  conditions?: string[];
+  includeTypeImports?: boolean;
+  includeDev?: boolean;
+  omitDev?: boolean;
+  include?: string[];
+  omit?: string[];
+  cacheDir?: string;
+  offline?: boolean;
+  ignoreFile?: string;
+  severityThreshold?: "low" | "medium" | "high" | "critical";
+};
+
+async function detectOrThrow(registry: ProviderRegistry, opts: ScanOptions): Promise<{
+  manager: "npm" | "pnpm" | "yarn";
+  lockfilePath: string;
+}> {
   const detectMode = opts.mode === "installed" ? "installed" : "lockfile";
-  const detected = await depsProvider.detectContext(opts.root, detectMode);
+  const detected = await registry.detectContext(opts.root, detectMode);
+
   if (!detected) {
     if (opts.mode === "installed") {
       throw new Error(
@@ -85,10 +150,132 @@ async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
     }
   }
 
+  return {
+    manager: detected.manager,
+    lockfilePath: detected.lockfilePath
+  };
+}
+
+async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
+  const opts = resolveScanOptions(raw as never, process.cwd());
+  const depsProvider = new ProviderRegistry();
+  await detectOrThrow(depsProvider, opts);
+
   const osvProvider = new OsvProvider(new OsvClient(), new OsvCache(opts.cacheDir), opts.offline);
   const result = await runScan(opts, depsProvider, osvProvider, packageJson.version);
   process.stdout.write(renderResult(result, opts));
   process.exitCode = determineExitCode(result, opts);
+}
+
+async function runFix(raw: FixCommandOptions): Promise<void> {
+  const strategy = parseFixStrategy(raw.strategy);
+  const scope = parseFixScope(raw.scope);
+  const upgradeLevel = parseFixUpgradeLevel(raw.upgradeLevel);
+  const format = parseFixFormat(raw.format);
+
+  const scanOpts = resolveScanOptions(
+    {
+      mode: raw.mode,
+      format: "json",
+      root: raw.root,
+      entry: raw.entry,
+      conditions: raw.conditions,
+      includeTypeImports: raw.includeTypeImports,
+      includeDev: raw.includeDev,
+      omitDev: raw.omitDev,
+      include: raw.include,
+      omit: raw.omit,
+      cacheDir: raw.cacheDir,
+      offline: raw.offline,
+      ignoreFile: raw.ignoreFile,
+      severityThreshold: raw.severityThreshold,
+      exitCodeOn: "none",
+      failOn: "all"
+    },
+    process.cwd()
+  );
+
+  const onlyReachable = Boolean(raw.onlyReachable);
+  const includeUnreachable = Boolean(raw.includeUnreachable);
+
+  const depsProvider = new ProviderRegistry();
+  const detected = await detectOrThrow(depsProvider, scanOpts);
+  const osvProvider = new OsvProvider(new OsvClient(), new OsvCache(scanOpts.cacheDir), scanOpts.offline);
+
+  const detectMode = scanOpts.mode === "installed" ? "installed" : "lockfile";
+  const [result, graph] = await Promise.all([
+    runScan(scanOpts, depsProvider, osvProvider, packageJson.version),
+    depsProvider.load(scanOpts.root, detectMode)
+  ]);
+
+  const plan = buildRemediationPlan(result, graph, {
+    strategy,
+    manager: detected.manager,
+    policy: {
+      scope,
+      upgradeLevel,
+      onlyReachable,
+      includeUnreachable,
+      includeDev: scanOpts.includeDev,
+      severityThreshold: scanOpts.severityThreshold
+    },
+    relock: Boolean(raw.relock),
+    verify: Boolean(raw.verify)
+  });
+
+  let verifyOutput: string | undefined;
+  if (raw.apply) {
+    const applyResult = await applyRemediationPlan(
+      plan,
+      {
+        projectRoot: scanOpts.root,
+        lockfilePath: detected.lockfilePath,
+        rollbackOnFail: raw.rollbackOnFail !== false,
+        verify: raw.verify
+          ? {
+              scanOptions: scanOpts,
+              expectedFixedVulnIds: plan.fixes.fixedVulnerabilities,
+              baselineVulnIds: result.findings.map((finding) => finding.vulnId),
+              noIntroduce: Boolean(raw.noIntroduce),
+              toolVersion: packageJson.version
+            }
+          : undefined
+      },
+      depsProvider,
+      osvProvider
+    );
+
+    if (applyResult.verify) {
+      plan.fixes.fixedVulnerabilities = applyResult.verify.fixedVulnerabilities;
+      plan.fixes.remainingVulnerabilities = applyResult.verify.remainingVulnerabilities;
+      plan.fixes.introducedVulnerabilities = applyResult.verify.introducedVulnerabilities;
+      verifyOutput = renderVerifyOutcomeText(applyResult.verify);
+      if (!applyResult.verify.ok) {
+        process.exitCode = 1;
+      }
+    }
+  }
+
+  if (format === "json") {
+    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+    if (verifyOutput && raw.apply) {
+      process.stderr.write(verifyOutput);
+    }
+    return;
+  }
+
+  process.stdout.write(renderRemediationText(plan));
+  if (raw.apply) {
+    process.stdout.write(`Applied: yes\n`);
+    if (raw.relock) {
+      process.stdout.write("Relock: requested\n");
+    }
+  } else {
+    process.stdout.write("Applied: no (dry-run)\n");
+  }
+  if (verifyOutput) {
+    process.stdout.write(verifyOutput);
+  }
 }
 
 async function runExplain(vulnId: string, options: { cacheDir?: string; offline?: boolean; format?: string }): Promise<void> {
@@ -136,14 +323,45 @@ program
   });
 
 program
+  .command("fix")
+  .description("generate guided remediation plan and optionally apply it")
+  .option("--strategy <strategy>", "override|direct|in-place|auto", "override")
+  .option("--scope <scope>", "global|by-parent", "global")
+  .option("--upgrade-level <level>", "patch|minor|major|any", "any")
+  .option("--format <format>", "text|json", "text")
+  .option("--apply", "apply manifest changes")
+  .option("--relock", "update lockfile after apply")
+  .option("--verify", "rescan and verify target vulnerabilities are fixed")
+  .option("--no-introduce", "verify fails when new vulnerabilities are introduced")
+  .option("--no-rollback-on-fail", "keep modified files when apply/relock fails")
+  .option("--only-reachable", "plan only for reachable findings")
+  .option("--include-unreachable", "include unreachable findings in planning")
+  .option("--mode <mode>", "scan mode: lockfile|installed|source", "lockfile")
+  .option("--root <dir>", "project root", ".")
+  .option("--entry <file>", "entry file (repeatable)", collect, [])
+  .option("--conditions <condition>", "module resolution condition (repeatable)", collect, [])
+  .option("--include-type-imports", "include TypeScript type-only imports in reachability")
+  .option("--include <type>", "include dependency types (e.g. dev)", collect, [])
+  .option("--omit <type>", "omit dependency types (default: dev)", collect, ["dev"])
+  .option("--include-dev", "include dev dependencies")
+  .option("--omit-dev", "omit dev dependencies")
+  .option("--cache-dir <dir>", "OSV cache directory")
+  .option("--offline", "use cached vulnerability records only")
+  .option("--ignore-file <path>", "ignore policy file path")
+  .option("--severity-threshold <level>", "low|medium|high|critical")
+  .action(async (_options, command) => {
+    await runFix(command.optsWithGlobals() as FixCommandOptions);
+  });
+
+program
   .command("explain")
   .description("show vulnerability details by ID")
   .argument("<vulnId>")
   .option("--cache-dir <dir>", "OSV cache directory")
   .option("--offline", "use cached vulnerability records only")
   .option("--format <format>", "text|json", "text")
-  .action(async (vulnId, options) => {
-    await runExplain(vulnId, options);
+  .action(async (vulnId, _options, command) => {
+    await runExplain(vulnId, command.optsWithGlobals() as { cacheDir?: string; offline?: boolean; format?: string });
   });
 
 program

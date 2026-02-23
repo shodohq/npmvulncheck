@@ -62,7 +62,67 @@ function dedupeInventory(
   return { inventory: Array.from(inventoryMap.values()), packageToNodes };
 }
 
-function collectFixedVersion(vuln: OsvVulnerability, packageName: string): string | undefined {
+type SemverParts = {
+  major: number;
+  minor: number;
+  patch: number;
+};
+
+type FixResolutionContext = {
+  allowRegistryLookup: boolean;
+  vulnProvider: VulnerabilityProvider;
+  versionVulnIdsCache: Map<string, Promise<Set<string> | undefined>>;
+  registryVersionsCache: Map<string, Promise<string[] | undefined>>;
+};
+
+function parseSemverParts(version: string): SemverParts | undefined {
+  const normalized = version.trim().replace(/^v/i, "").split("-")[0].split("+")[0];
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) {
+    return undefined;
+  }
+
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if ([major, minor, patch].some((value) => Number.isNaN(value) || value < 0)) {
+    return undefined;
+  }
+
+  return { major, minor, patch };
+}
+
+function compareVersion(a: string, b: string): number {
+  const parsedA = parseSemverParts(a);
+  const parsedB = parseSemverParts(b);
+
+  if (parsedA && parsedB) {
+    if (parsedA.major !== parsedB.major) {
+      return parsedA.major - parsedB.major;
+    }
+    if (parsedA.minor !== parsedB.minor) {
+      return parsedA.minor - parsedB.minor;
+    }
+    return parsedA.patch - parsedB.patch;
+  }
+
+  return a.localeCompare(b);
+}
+
+function isSameOrNewerVersion(candidate: string, current: string): boolean {
+  const parsedCandidate = parseSemverParts(candidate);
+  const parsedCurrent = parseSemverParts(current);
+
+  if (parsedCandidate && parsedCurrent) {
+    return compareVersion(candidate, current) >= 0;
+  }
+
+  return candidate !== current;
+}
+
+function collectFixedVersions(vuln: OsvVulnerability, packageName: string): string[] {
+  const versions = new Set<string>();
+
   for (const affected of vuln.affected ?? []) {
     if (affected.package?.name !== packageName) {
       continue;
@@ -71,23 +131,162 @@ function collectFixedVersion(vuln: OsvVulnerability, packageName: string): strin
     for (const range of affected.ranges ?? []) {
       for (const event of range.events ?? []) {
         if (event.fixed) {
-          return event.fixed;
+          versions.add(event.fixed.trim());
         }
       }
     }
   }
 
+  return Array.from(versions).filter(Boolean).sort(compareVersion);
+}
+
+async function getVulnIdsByVersion(
+  context: FixResolutionContext,
+  packageName: string,
+  version: string
+): Promise<Set<string> | undefined> {
+  const key = packageKey(packageName, version);
+  const fromCache = context.versionVulnIdsCache.get(key);
+  if (fromCache) {
+    return fromCache;
+  }
+
+  const query = (async () => {
+    const result = await context.vulnProvider.queryPackages([{ name: packageName, version }]).catch(() => undefined);
+    if (!result) {
+      return undefined;
+    }
+    const matches = result.get(key) ?? [];
+    return new Set(matches.map((match) => match.id));
+  })();
+
+  context.versionVulnIdsCache.set(key, query);
+  return query;
+}
+
+async function pickVerifiedCandidate(
+  context: FixResolutionContext,
+  vulnId: string,
+  packageName: string,
+  candidates: string[]
+): Promise<{ version?: string; verified: boolean }> {
+  let verified = false;
+
+  for (const candidate of candidates) {
+    const vulnIds = await getVulnIdsByVersion(context, packageName, candidate);
+    if (!vulnIds) {
+      continue;
+    }
+    verified = true;
+
+    if (!vulnIds.has(vulnId)) {
+      return {
+        version: candidate,
+        verified
+      };
+    }
+  }
+
+  return {
+    verified
+  };
+}
+
+async function listRegistryVersions(
+  context: FixResolutionContext,
+  packageName: string
+): Promise<string[] | undefined> {
+  if (!context.allowRegistryLookup || !context.vulnProvider.listPackageVersions) {
+    return undefined;
+  }
+
+  const fromCache = context.registryVersionsCache.get(packageName);
+  if (fromCache) {
+    return fromCache;
+  }
+
+  const loaded = context.vulnProvider
+    .listPackageVersions(packageName)
+    .then((versions) => {
+      if (!versions) {
+        return undefined;
+      }
+      const deduped = Array.from(new Set(versions.map((value) => value.trim()).filter(Boolean)));
+      deduped.sort(compareVersion);
+      return deduped;
+    })
+    .catch(() => undefined);
+
+  context.registryVersionsCache.set(packageName, loaded);
+  return loaded;
+}
+
+async function toFixSuggestion(
+  vuln: OsvVulnerability,
+  packageName: string,
+  currentVersion: string,
+  context: FixResolutionContext
+): Promise<FixSuggestion | undefined> {
+  const fixedCandidates = collectFixedVersions(vuln, packageName).filter((version) =>
+    isSameOrNewerVersion(version, currentVersion)
+  );
+  let fixedCandidatesChecked = false;
+
+  if (fixedCandidates.length > 0) {
+    const selected = await pickVerifiedCandidate(context, vuln.id, packageName, fixedCandidates);
+    fixedCandidatesChecked = selected.verified;
+
+    if (selected.version) {
+      return {
+        fixedVersion: selected.version
+      };
+    }
+  }
+
+  if (fixedCandidates.length === 0 || fixedCandidatesChecked) {
+    const registryVersions = await listRegistryVersions(context, packageName);
+    if (registryVersions && registryVersions.length > 0) {
+      const candidates = registryVersions.filter((version) => isSameOrNewerVersion(version, currentVersion));
+      const selected = await pickVerifiedCandidate(context, vuln.id, packageName, candidates);
+      if (selected.version) {
+        return {
+          fixedVersion: selected.version
+        };
+      }
+    }
+  }
+
+  if (fixedCandidates.length > 0 && !fixedCandidatesChecked) {
+    return {
+      fixedVersion: fixedCandidates[0]
+    };
+  }
+
   return undefined;
 }
 
-function toFixSuggestion(vuln: OsvVulnerability, packageName: string): FixSuggestion | undefined {
-  const fixedVersion = collectFixedVersion(vuln, packageName);
-  if (!fixedVersion) {
-    return undefined;
+type FixSuggestionCacheKey = string;
+
+function buildFixSuggestionCacheKey(vulnId: string, packageName: string, packageVersion: string): FixSuggestionCacheKey {
+  return `${vulnId}::${packageName}::${packageVersion}`;
+}
+
+async function getFixSuggestion(
+  cache: Map<FixSuggestionCacheKey, Promise<FixSuggestion | undefined>>,
+  vuln: OsvVulnerability,
+  packageName: string,
+  packageVersion: string,
+  context: FixResolutionContext
+): Promise<FixSuggestion | undefined> {
+  const cacheKey = buildFixSuggestionCacheKey(vuln.id, packageName, packageVersion);
+  const fromCache = cache.get(cacheKey);
+  if (fromCache) {
+    return fromCache;
   }
-  return {
-    fixedVersion
-  };
+
+  const resolved = toFixSuggestion(vuln, packageName, packageVersion, context);
+  cache.set(cacheKey, resolved);
+  return resolved;
 }
 
 function toReachability(
@@ -275,6 +474,13 @@ export async function runScan(
   const vulnDetailCache = new Map<string, OsvVulnerability>();
   const dependencyPathCache = new Map<string, string[][]>();
   const findingById = new Map<string, Finding>();
+  const fixSuggestionCache = new Map<FixSuggestionCacheKey, Promise<FixSuggestion | undefined>>();
+  const fixResolutionContext: FixResolutionContext = {
+    allowRegistryLookup: !opts.offline,
+    vulnProvider,
+    versionVulnIdsCache: new Map<string, Promise<Set<string> | undefined>>(),
+    registryVersionsCache: new Map<string, Promise<string[] | undefined>>()
+  };
 
   for (const pkg of inventory) {
     const matches = matchesByPackage.get(packageKey(pkg.name, pkg.version)) ?? [];
@@ -285,6 +491,13 @@ export async function runScan(
       if (isIgnored(detail.id, ignorePolicy)) {
         continue;
       }
+      const fix = await getFixSuggestion(
+        fixSuggestionCache,
+        detail,
+        pkg.name,
+        pkg.version,
+        fixResolutionContext
+      );
 
       let finding = findingById.get(detail.id);
       if (!finding) {
@@ -299,7 +512,6 @@ export async function runScan(
           dependencyPathCache.set(node.id, paths);
         }
         const reach = toReachability(node.id, reachability?.byNodeId.get(node.id), opts.mode);
-        const fix = toFixSuggestion(detail, node.name);
         mergeAffected(finding, node, paths, reach, fix);
       }
     }

@@ -97,6 +97,10 @@ If no valid entries are provided, entries are auto-discovered from:
 # Scan
 npmvulncheck [options]
 
+# Guided remediation plan
+npmvulncheck fix --strategy override
+npmvulncheck fix --strategy override --apply --relock --verify
+
 # Show vulnerability detail
 npmvulncheck explain GHSA-xxxx-xxxx-xxxx
 
@@ -122,6 +126,41 @@ npmvulncheck version
 - `--exit-code-on none|findings|reachable-findings`
 - `--fail-on all|reachable|direct`
 - `--severity-threshold low|medium|high|critical`
+
+## Guided remediation (`fix`)
+
+Generate and apply remediation plans based on scan findings.
+
+```bash
+# dry-run plan
+npmvulncheck fix --strategy override --format text
+
+# apply package.json override changes
+npmvulncheck fix --strategy override --apply
+
+# apply + relock + verify with source reachability filter
+npmvulncheck fix \
+  --strategy override \
+  --mode source \
+  --entry src/index.ts \
+  --only-reachable \
+  --apply \
+  --relock \
+  --verify \
+  --no-introduce
+```
+
+Important options:
+
+- `--strategy override|direct|in-place|auto` (currently implemented: `override`, `auto` maps to override)
+- `--scope global|by-parent`
+- `--upgrade-level patch|minor|major|any`
+- `--apply`
+- `--relock`
+- `--verify`
+- `--no-introduce`
+- `--only-reachable` / `--include-unreachable`
+- `--format text|json`
 
 ## Exit codes and CI behavior
 

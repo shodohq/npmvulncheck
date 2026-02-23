@@ -1,0 +1,66 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`fix plan snapshot > matches expected override plan output 1`] = `
+{
+  "fixes": {
+    "fixedVulnerabilities": [
+      "GHSA-transitive",
+    ],
+    "remainingVulnerabilities": [
+      "GHSA-direct",
+    ],
+  },
+  "operations": [
+    {
+      "changes": [
+        {
+          "from": "1.0.0",
+          "package": "pkg-a",
+          "scope": {
+            "parent": "parent",
+            "parentVersion": "2.0.0",
+          },
+          "to": "1.2.0",
+          "why": "Fixes GHSA-transitive (reachable)",
+        },
+      ],
+      "file": "package.json",
+      "id": "op-manifest-override-1",
+      "kind": "manifest-override",
+      "manager": "npm",
+    },
+    {
+      "args": [
+        "install",
+        "--package-lock-only",
+      ],
+      "command": "npm",
+      "id": "op-relock-1",
+      "kind": "relock",
+      "manager": "npm",
+    },
+    {
+      "id": "op-verify-1",
+      "kind": "verify",
+      "note": "Rescan to confirm selected vulnerabilities were fixed.",
+    },
+  ],
+  "packageManager": "npm",
+  "strategy": "override",
+  "summary": {
+    "reasonedTopChoices": [
+      {
+        "opId": "op-manifest-override-1",
+        "rationale": "Generated 1 override change(s) for 1 vulnerability record(s). 1 vulnerability record(s) include direct dependencies and were left for a future direct strategy.",
+        "risk": "low",
+      },
+    ],
+  },
+  "target": {
+    "includeDev": false,
+    "onlyReachable": false,
+    "severityThreshold": undefined,
+  },
+  "tool": "npmvulncheck",
+}
+`;
