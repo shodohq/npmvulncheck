@@ -3,7 +3,7 @@ import { DependencyManager, ScanOptions } from "../core/types";
 export type RemediationStrategy = "override" | "direct" | "in-place" | "auto";
 export type RemediationScope = "global" | "by-parent";
 export type UpgradeLevel = "patch" | "minor" | "major" | "any";
-export type RemediationFormat = "text" | "json";
+export type RemediationFormat = "text" | "json" | "sarif";
 
 export type RemediationTarget = {
   onlyReachable: boolean;

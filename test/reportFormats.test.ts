@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ScanResult } from "../src/core/types";
 import { renderOpenVex } from "../src/report/openvex";
 import { renderSarif } from "../src/report/sarif";
+import { RemediationPlan } from "../src/remediation/types";
 
 function makeResult(reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" }): ScanResult {
   return {
@@ -57,6 +58,55 @@ describe("report renderers", () => {
     expect(parsed.runs).toHaveLength(1);
     expect(parsed.runs[0].tool.driver.rules[0].id).toBe("GHSA-test");
     expect(parsed.runs[0].results.length).toBeGreaterThan(0);
+  });
+
+  it("renders SARIF fixes when a remediation plan is supplied", () => {
+    const result = makeResult({ reachable: true, level: "import" });
+    const plan: RemediationPlan = {
+      tool: "npmvulncheck",
+      strategy: "auto",
+      packageManager: "npm",
+      target: {
+        onlyReachable: false,
+        includeDev: false
+      },
+      operations: [
+        {
+          id: "op-manifest-direct-upgrade-1",
+          kind: "manifest-direct-upgrade",
+          file: "package.json",
+          depField: "dependencies",
+          package: "pkg",
+          fromRange: "1.0.0",
+          toRange: "1.2.0",
+          why: "Fixes GHSA-test"
+        }
+      ],
+      fixes: {
+        fixedVulnerabilities: ["GHSA-test"],
+        remainingVulnerabilities: []
+      },
+      summary: {
+        reasonedTopChoices: [
+          {
+            opId: "op-manifest-direct-upgrade-1",
+            rationale: "fixture",
+            risk: "low"
+          }
+        ]
+      }
+    };
+
+    const parsed = JSON.parse(
+      renderSarif(result, {
+        remediationPlan: plan
+      })
+    ) as {
+      runs: Array<{ results: Array<{ fixes?: Array<{ description: { text: string } }> }> }>;
+    };
+
+    expect(parsed.runs[0].results[0].fixes?.length).toBeGreaterThan(0);
+    expect(parsed.runs[0].results[0].fixes?.[0]?.description.text).toContain("Upgrade direct dependency pkg");
   });
 
   it("renders OpenVEX not_affected with justification for unreachable findings", () => {

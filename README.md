@@ -163,7 +163,7 @@ Important options:
 - `--verify`
 - `--no-introduce`
 - `--only-reachable` / `--include-unreachable`
-- `--format text|json`
+- `--format text|json|sarif` (`sarif`: emits scan-compatible SARIF results with remediation `fixes`)
 
 ## Exit codes and CI behavior
 

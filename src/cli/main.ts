@@ -93,6 +93,9 @@ function parseFixFormat(value: string | undefined): RemediationFormat {
   if (value === "json") {
     return "json";
   }
+  if (value === "sarif") {
+    return "sarif";
+  }
   return "text";
 }
 
@@ -264,6 +267,18 @@ async function runFix(raw: FixCommandOptions): Promise<void> {
     return;
   }
 
+  if (format === "sarif") {
+    process.stdout.write(
+      renderSarif(result, {
+        remediationPlan: plan
+      })
+    );
+    if (verifyOutput && raw.apply) {
+      process.stderr.write(verifyOutput);
+    }
+    return;
+  }
+
   process.stdout.write(renderRemediationText(plan));
   if (raw.apply) {
     process.stdout.write(`Applied: yes\n`);
@@ -328,7 +343,7 @@ program
   .option("--strategy <strategy>", "override|direct|in-place|auto", "auto")
   .option("--scope <scope>", "global|by-parent", "global")
   .option("--upgrade-level <level>", "patch|minor|major|any", "any")
-  .option("--format <format>", "text|json", "text")
+  .option("--format <format>", "text|json|sarif", "text")
   .option("--apply", "apply manifest changes")
   .option("--relock", "update lockfile after apply")
   .option("--verify", "rescan and verify target vulnerabilities are fixed")
