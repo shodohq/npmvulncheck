@@ -217,7 +217,21 @@ npmvulncheck --mode lockfile --offline
 
 Use `--cache-dir <dir>` to override the cache location.
 
-## Example project
+## Example projects
+
+### Guided remediation (`fix`)
+
+`examples/guided-remediation` demonstrates how `fix --strategy override` proposes and applies a remediation plan for transitive vulnerabilities.
+
+```bash
+# dry-run
+npmvulncheck fix --root examples/guided-remediation --strategy override --format text
+
+# apply + relock + verify
+npmvulncheck fix --root examples/guided-remediation --strategy override --apply --relock --verify --no-introduce --format text
+```
+
+### Source reachability
 
 `examples/complex-unused-deps` demonstrates how `source` mode can reduce findings from dependencies that exist in the lockfile but are not reachable from your entrypoint.
 
