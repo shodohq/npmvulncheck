@@ -155,7 +155,7 @@ npmvulncheck fix \
 
 Important options:
 
-- `--strategy override|direct|in-place|auto` (`override`: transitive only, `direct`: direct deps only, `auto`: direct + transitive, `in-place`: reserved)
+- `--strategy override|direct|in-place|auto` (default: `auto`; `override`: transitive only, `direct`: direct deps only, `auto`: direct + transitive, `in-place`: reserved)
 - `--scope global|by-parent`
 - `--upgrade-level patch|minor|major|any`
 - `--apply`

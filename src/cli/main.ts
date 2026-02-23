@@ -72,7 +72,7 @@ function parseFixStrategy(value: string | undefined): RemediationStrategy {
   if (value === "override" || value === "direct" || value === "in-place" || value === "auto") {
     return value;
   }
-  return "override";
+  return "auto";
 }
 
 function parseFixScope(value: string | undefined): RemediationScope {
@@ -325,7 +325,7 @@ program
 program
   .command("fix")
   .description("generate guided remediation plan and optionally apply it")
-  .option("--strategy <strategy>", "override|direct|in-place|auto", "override")
+  .option("--strategy <strategy>", "override|direct|in-place|auto", "auto")
   .option("--scope <scope>", "global|by-parent", "global")
   .option("--upgrade-level <level>", "patch|minor|major|any", "any")
   .option("--format <format>", "text|json", "text")

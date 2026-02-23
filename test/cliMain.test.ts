@@ -144,7 +144,7 @@ describe("cli main error handling", () => {
     expect(stderr.includes("No supported lockfile found")).toBe(true);
   });
 
-  it("honors fix --format json and emits plan JSON", async () => {
+  it("uses auto as the default fix strategy and emits plan JSON", async () => {
     const nodeBin = process.execPath;
     const cliFile = path.resolve(process.cwd(), "dist", "cli", "main.js");
     const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "npmvulncheck-cli-fix-json-"));
@@ -189,8 +189,6 @@ describe("cli main error handling", () => {
         [
           cliFile,
           "fix",
-          "--strategy",
-          "override",
           "--format",
           "json",
           "--offline",
@@ -205,7 +203,7 @@ describe("cli main error handling", () => {
 
       const parsed = JSON.parse(stdout) as { tool?: string; strategy?: string };
       expect(parsed.tool).toBe("npmvulncheck");
-      expect(parsed.strategy).toBe("override");
+      expect(parsed.strategy).toBe("auto");
     } finally {
       await fs.rm(fixtureRoot, { recursive: true, force: true });
     }
