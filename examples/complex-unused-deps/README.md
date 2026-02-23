@@ -30,3 +30,7 @@ npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index
 ```
 
 In `source` mode, non-reachable dependencies appear as `reachability: unknown` (or non-reachable), reducing noise.
+
+This fixture is focused on scan behavior. Running `npmvulncheck fix --strategy override` can return a no-op plan
+because vulnerable packages in this sample are direct dependencies, while `override` targets transitive ones.
+Use `npmvulncheck fix --strategy direct` (direct only) or `--strategy auto` (direct + transitive) to include direct upgrades.

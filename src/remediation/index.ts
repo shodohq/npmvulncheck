@@ -4,11 +4,12 @@ import { DepGraph } from "../core/types";
 import { ScanResult } from "../core/types";
 import { DependencyGraphProvider } from "../deps/provider";
 import { VulnerabilityProvider } from "../osv/provider";
-import { applyManifestOverrideOperation } from "./apply/manifestWriter";
+import { applyManifestDirectUpgradeOperation, applyManifestOverrideOperation } from "./apply/manifestWriter";
 import { buildRelockCommand, runRelockOperation } from "./apply/relockRunner";
 import { runVerify } from "./apply/verifyRunner";
 import { getManifestOverrideProvider } from "./providers";
 import { buildOverridePlan } from "./strategies/overrideStrategy";
+import { buildHybridPlan } from "./strategies/hybridStrategy";
 import {
   ApplyRemediationOptions,
   ApplyRemediationResult,
@@ -17,12 +18,15 @@ import {
   RemediationStrategy
 } from "./types";
 
-function resolveStrategy(strategy: RemediationStrategy): "override" {
-  if (strategy === "override" || strategy === "auto") {
-    return "override";
+const DIRECT_FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
+type DirectField = (typeof DIRECT_FIELDS)[number];
+
+function resolveStrategy(strategy: RemediationStrategy): "override" | "direct" | "auto" {
+  if (strategy === "override" || strategy === "direct" || strategy === "auto") {
+    return strategy;
   }
 
-  throw new Error(`Strategy \"${strategy}\" is not implemented yet. Use --strategy=override.`);
+  throw new Error(`Strategy \"${strategy}\" is not implemented yet. Use --strategy=override|direct|auto.`);
 }
 
 export function buildRemediationPlan(
@@ -40,7 +44,15 @@ export function buildRemediationPlan(
           rootDirectNodeIds: graph.rootDirectNodeIds,
           policy: options.policy
         })
-      : undefined;
+      : buildHybridPlan({
+          manager: options.manager,
+          findings: result.findings,
+          rootDirectNodeIds: graph.rootDirectNodeIds,
+          policy: options.policy,
+          includeDirect: true,
+          includeTransitive: resolvedStrategy === "auto",
+          strategyLabel: resolvedStrategy
+        });
 
   if (!basePlan) {
     throw new Error(`Unsupported strategy: ${options.strategy}`);
@@ -74,6 +86,39 @@ export function buildRemediationPlan(
   };
 }
 
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function cloneJsonObject<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function resolveDirectUpgradeTarget(
+  packageJson: Record<string, unknown>,
+  operation: Extract<RemediationPlan["operations"][number], { kind: "manifest-direct-upgrade" }>
+): { field: DirectField; deps: Record<string, unknown> } | undefined {
+  const preferred = asObject(packageJson[operation.depField]);
+  if (preferred && typeof preferred[operation.package] === "string") {
+    return {
+      field: operation.depField,
+      deps: preferred
+    };
+  }
+
+  for (const field of DIRECT_FIELDS) {
+    const deps = asObject(packageJson[field]);
+    if (deps && typeof deps[operation.package] === "string") {
+      return { field, deps };
+    }
+  }
+
+  return undefined;
+}
+
 async function snapshotFile(filePath: string, snapshots: Map<string, string | undefined>): Promise<void> {
   if (snapshots.has(filePath)) {
     return;
@@ -98,21 +143,76 @@ async function rollbackSnapshots(snapshots: Map<string, string | undefined>): Pr
   }
 }
 
-async function validateManifestOverrideOperations(plan: RemediationPlan, packageJsonPath: string): Promise<void> {
-  const operations = plan.operations.filter((operation) => operation.kind === "manifest-override");
-  if (operations.length === 0) {
+function validateManifestDirectUpgradeOperations(plan: RemediationPlan, packageJson: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+  for (const operation of plan.operations) {
+    if (operation.kind !== "manifest-direct-upgrade") {
+      continue;
+    }
+
+    if (!operation.package || !operation.toRange) {
+      errors.push(`invalid direct upgrade operation "${operation.id}" (missing package or toRange).`);
+      continue;
+    }
+
+    const target = resolveDirectUpgradeTarget(packageJson, operation);
+    if (!target) {
+      errors.push(
+        `direct dependency "${operation.package}" was not found in dependencies/devDependencies/optionalDependencies.`
+      );
+    }
+  }
+  return errors;
+}
+
+function applyDirectUpgradeOperationsToManifest(
+  packageJson: Record<string, unknown>,
+  plan: RemediationPlan
+): Record<string, unknown> {
+  const projected = cloneJsonObject(packageJson);
+
+  for (const operation of plan.operations) {
+    if (operation.kind !== "manifest-direct-upgrade") {
+      continue;
+    }
+
+    const target = resolveDirectUpgradeTarget(projected, operation);
+    if (!target) {
+      continue;
+    }
+
+    target.deps[operation.package] = operation.toRange;
+    projected[target.field] = target.deps;
+  }
+
+  return projected;
+}
+
+async function validateManifestOperations(plan: RemediationPlan, packageJsonPath: string): Promise<void> {
+  const raw = await fs.readFile(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(raw) as unknown;
+  if (!packageJson || typeof packageJson !== "object" || Array.isArray(packageJson)) {
+    throw new Error("Invalid remediation plan:\npackage.json is not a JSON object.");
+  }
+
+  const packageObject = packageJson as Record<string, unknown>;
+  const errors = validateManifestDirectUpgradeOperations(plan, packageObject);
+
+  const overrideOperations = plan.operations.filter((operation) => operation.kind === "manifest-override");
+  if (overrideOperations.length === 0) {
+    if (errors.length > 0) {
+      throw new Error(`Invalid remediation plan:\n${errors.join("\n")}`);
+    }
     return;
   }
 
-  const raw = await fs.readFile(packageJsonPath, "utf8");
-  const packageJson = JSON.parse(raw) as unknown;
+  const projectedManifest = applyDirectUpgradeOperationsToManifest(packageObject, plan);
 
-  const managers = new Set(operations.map((operation) => operation.manager));
-  const errors: string[] = [];
+  const managers = new Set(overrideOperations.map((operation) => operation.manager));
 
   for (const manager of managers) {
     const provider = getManifestOverrideProvider(manager);
-    const validation = provider.validate(plan, packageJson);
+    const validation = provider.validate(plan, projectedManifest);
     if (!validation.ok) {
       errors.push(...validation.errors.map((message) => `${manager}: ${message}`));
     }
@@ -135,9 +235,15 @@ export async function applyRemediationPlan(
   let verifyResult: ApplyRemediationResult["verify"];
 
   try {
-    await validateManifestOverrideOperations(plan, packageJsonPath);
+    await validateManifestOperations(plan, packageJsonPath);
 
     for (const operation of plan.operations) {
+      if (operation.kind === "manifest-direct-upgrade") {
+        await snapshotFile(packageJsonPath, snapshots);
+        await applyManifestDirectUpgradeOperation(operation, options.projectRoot);
+        continue;
+      }
+
       if (operation.kind === "manifest-override") {
         await snapshotFile(packageJsonPath, snapshots);
         await applyManifestOverrideOperation(operation, options.projectRoot);

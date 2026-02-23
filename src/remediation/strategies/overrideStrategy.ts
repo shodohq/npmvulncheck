@@ -331,7 +331,9 @@ export function buildOverridePlan(input: OverrideStrategyInput): RemediationPlan
   const summary: RemediationPlan["summary"] = {
     reasonedTopChoices: [
       {
-        opId: operations[0]?.id ?? "op-none",
+        opId:
+          operations[0]?.id ??
+          (directOnlyVulns.size > 0 ? "op-direct-upgrade-required" : "op-no-applicable-override"),
         rationale: summaryLines.join(" "),
         risk: collectOperationRisk(policy, changes.length)
       }

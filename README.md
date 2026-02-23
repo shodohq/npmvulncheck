@@ -98,8 +98,8 @@ If no valid entries are provided, entries are auto-discovered from:
 npmvulncheck [options]
 
 # Guided remediation plan
-npmvulncheck fix --strategy override
-npmvulncheck fix --strategy override --apply --relock --verify
+npmvulncheck fix --strategy auto
+npmvulncheck fix --strategy auto --apply --relock --verify
 
 # Show vulnerability detail
 npmvulncheck explain GHSA-xxxx-xxxx-xxxx
@@ -132,15 +132,18 @@ npmvulncheck version
 Generate and apply remediation plans based on scan findings.
 
 ```bash
-# dry-run plan
-npmvulncheck fix --strategy override --format text
+# dry-run (direct + transitive)
+npmvulncheck fix --strategy auto --format text
 
-# apply package.json override changes
-npmvulncheck fix --strategy override --apply
+# dry-run (direct only)
+npmvulncheck fix --strategy direct --format text
+
+# dry-run (transitive only)
+npmvulncheck fix --strategy override --format text
 
 # apply + relock + verify with source reachability filter
 npmvulncheck fix \
-  --strategy override \
+  --strategy auto \
   --mode source \
   --entry src/index.ts \
   --only-reachable \
@@ -152,7 +155,7 @@ npmvulncheck fix \
 
 Important options:
 
-- `--strategy override|direct|in-place|auto` (currently implemented: `override`, `auto` maps to override)
+- `--strategy override|direct|in-place|auto` (`override`: transitive only, `direct`: direct deps only, `auto`: direct + transitive, `in-place`: reserved)
 - `--scope global|by-parent`
 - `--upgrade-level patch|minor|major|any`
 - `--apply`
@@ -221,11 +224,14 @@ Use `--cache-dir <dir>` to override the cache location.
 
 ### Guided remediation (`fix`)
 
-`examples/guided-remediation` demonstrates how `fix --strategy override` proposes and applies a remediation plan for transitive vulnerabilities.
+`examples/guided-remediation` demonstrates transitive remediation flow (`override`) and can also be run with `auto`.
 
 ```bash
 # dry-run
 npmvulncheck fix --root examples/guided-remediation --strategy override --format text
+
+# dry-run (auto: direct + transitive)
+npmvulncheck fix --root examples/guided-remediation --strategy auto --format text
 
 # apply + relock + verify
 npmvulncheck fix --root examples/guided-remediation --strategy override --apply --relock --verify --no-introduce --format text
@@ -239,6 +245,8 @@ npmvulncheck fix --root examples/guided-remediation --strategy override --apply 
 npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text
 npmvulncheck --root examples/complex-unused-deps --mode source --entry src/index.ts --show traces --format text
 ```
+
+Note: this fixture is for reachability scans, not remediation workflow coverage. `fix --strategy override` may produce a no-op plan when findings are direct dependencies; use `--strategy direct` or `--strategy auto` to include direct upgrades.
 
 ## Development
 

@@ -101,6 +101,7 @@ describe("buildOverridePlan", () => {
 
     expect(plan.fixes.fixedVulnerabilities).toEqual(["GHSA-transitive"]);
     expect(plan.fixes.remainingVulnerabilities).toEqual(["GHSA-direct", "GHSA-no-fix"]);
+    expect(plan.summary.reasonedTopChoices[0]?.opId).toBe("op-manifest-override-1");
   });
 
   it("creates by-parent scoped changes when requested", () => {
@@ -236,5 +237,36 @@ describe("buildOverridePlan", () => {
     expect(plan.operations).toHaveLength(0);
     expect(plan.fixes.fixedVulnerabilities).toEqual([]);
     expect(plan.fixes.remainingVulnerabilities).toEqual(["GHSA-downgrade"]);
+    expect(plan.summary.reasonedTopChoices[0]?.opId).toBe("op-no-applicable-override");
+  });
+
+  it("uses direct-upgrade-required summary id when only direct vulnerabilities remain", () => {
+    const plan = buildOverridePlan({
+      manager: "npm",
+      findings: [
+        makeFinding({
+          vulnId: "GHSA-direct-only",
+          packageId: "node_modules/pkg-direct",
+          packageName: "pkg-direct",
+          packageVersion: "1.0.0",
+          fixedVersion: "1.1.0",
+          reachable: true,
+          paths: [["root@1.0.0", "pkg-direct@1.0.0"]]
+        })
+      ],
+      rootDirectNodeIds: new Set(["node_modules/pkg-direct"]),
+      policy: {
+        scope: "global",
+        upgradeLevel: "any",
+        onlyReachable: false,
+        includeUnreachable: true,
+        includeDev: false
+      }
+    });
+
+    expect(plan.operations).toHaveLength(0);
+    expect(plan.fixes.fixedVulnerabilities).toEqual([]);
+    expect(plan.fixes.remainingVulnerabilities).toEqual(["GHSA-direct-only"]);
+    expect(plan.summary.reasonedTopChoices[0]?.opId).toBe("op-direct-upgrade-required");
   });
 });
