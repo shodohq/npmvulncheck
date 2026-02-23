@@ -59,6 +59,12 @@ npm run build
 npm link
 ```
 
+### Docker image
+
+```bash
+docker run --rm -v "$PWD:/work" shodohq/npmvulncheck:latest --mode lockfile --format text
+```
+
 ## Quick start
 
 ```bash
@@ -243,15 +249,20 @@ GitHub Actions workflows are configured in `.github/workflows`.
 - `ci.yml`: runs on every `push` and `pull_request` with Node.js `18`, `20`, and `22`
   - Steps: `npm ci` -> `npm run lint` -> `npm test` -> `npm run build`
 - `scorecards.yml`: runs OpenSSF Scorecard on `main` push and weekly schedule, then uploads SARIF to code scanning
-- `cd.yml`: runs on `v*` tag push and publishes to npm after lint/test/build pass
+- `cd.yml`: runs on `v*` tag push and publishes to npm and Docker Hub after lint/test/build pass
   - Includes a guard that checks `vX.Y.Z` tag matches `package.json` version
   - Uses `npm publish --provenance --access public`
+  - Builds and pushes multi-arch image tags (`X.Y.Z`, `X.Y`, `latest`)
 
-### Required repository secret
+### Required repository secrets
 
-Set this secret in GitHub repository settings:
+Set these secrets in GitHub repository settings:
 
 - `NPM_TOKEN`: npm automation token with publish permission
+- `DOCKERHUB_USERNAME`: Docker Hub username (or organization bot user)
+- `DOCKERHUB_TOKEN`: Docker Hub access token
+
+If you publish under a different Docker Hub repository name, update `DOCKER_IMAGE` in `.github/workflows/cd.yml`.
 
 ### Release flow
 
@@ -264,11 +275,7 @@ git push origin main --follow-tags
 ```
 
 When the `v*` tag is pushed, the CD workflow publishes the package automatically.
-After publish, create a GitHub Release with generated notes:
-
-```bash
-gh release create vX.Y.Z --generate-notes
-```
+The same workflow also pushes Docker images and creates a GitHub Release with generated notes.
 
 ## Contributing
 
