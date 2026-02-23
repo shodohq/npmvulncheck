@@ -1,6 +1,6 @@
 {
   "name": "npmvulncheck",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "govulncheck-inspired vulnerability scanner for npm projects",
   "keywords": [
     "npm",
