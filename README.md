@@ -138,7 +138,7 @@ Remediation planning runs as part of the default scan flow. The selected strateg
 - `override`: transitive dependency overrides
 - `direct`: direct dependency upgrades
 - `auto`: direct + transitive candidates
-- `in-place`: reserved
+- `in-place`: alias of `auto` (kept for compatibility)
 
 Output mapping:
 

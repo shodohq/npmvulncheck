@@ -26,7 +26,11 @@ function resolveStrategy(strategy: RemediationStrategy): "override" | "direct" |
     return strategy;
   }
 
-  throw new Error(`Strategy \"${strategy}\" is not implemented yet. Use --strategy=override|direct|auto.`);
+  if (strategy === "in-place") {
+    return "auto";
+  }
+
+  throw new Error(`Unsupported strategy: ${strategy}`);
 }
 
 export function buildRemediationPlan(

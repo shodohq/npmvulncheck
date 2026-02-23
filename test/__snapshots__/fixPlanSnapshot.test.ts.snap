@@ -51,7 +51,7 @@ exports[`fix plan snapshot > matches expected override plan output 1`] = `
     "reasonedTopChoices": [
       {
         "opId": "op-manifest-override-1",
-        "rationale": "Generated 1 override change(s) for 1 vulnerability record(s). 1 vulnerability record(s) include direct dependencies and were left for a future direct strategy.",
+        "rationale": "Generated 1 override change(s) for 1 vulnerability record(s). 1 vulnerability record(s) include direct dependencies and remain unresolved under override strategy.",
         "risk": "low",
       },
     ],

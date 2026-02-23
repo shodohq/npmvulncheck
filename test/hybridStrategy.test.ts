@@ -157,4 +157,26 @@ describe("hybrid remediation strategy", () => {
     expect(plan.fixes.fixedVulnerabilities).toEqual(["GHSA-direct"]);
     expect(plan.fixes.remainingVulnerabilities).toEqual(["GHSA-transitive"]);
   });
+
+  it("in-place strategy is treated as auto for compatibility", () => {
+    const plan = buildRemediationPlan(makeScanResult(), makeGraph(), {
+      strategy: "in-place",
+      manager: "npm",
+      policy: {
+        scope: "by-parent",
+        upgradeLevel: "any",
+        onlyReachable: false,
+        includeUnreachable: true,
+        includeDev: false
+      },
+      relock: false,
+      verify: false
+    });
+
+    expect(plan.strategy).toBe("in-place");
+    expect(plan.operations.some((operation) => operation.kind === "manifest-direct-upgrade")).toBe(true);
+    expect(plan.operations.some((operation) => operation.kind === "manifest-override")).toBe(true);
+    expect(plan.fixes.fixedVulnerabilities).toEqual(["GHSA-direct", "GHSA-transitive"]);
+    expect(plan.fixes.remainingVulnerabilities).toEqual([]);
+  });
 });

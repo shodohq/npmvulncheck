@@ -1,13 +1,34 @@
 import { ScanResult } from "../core/types";
 import { RemediationPlan, RemediationScopeSelector } from "../remediation/types";
 
+export type RemediationReplacement = {
+  deletedRegion: {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  };
+  insertedContent: {
+    text: string;
+  };
+};
+
 export type RemediationAction = {
   description: string;
   file: string;
+  replacements?: RemediationReplacement[];
 };
 
 export function remediationLookupKey(vulnId: string, packageName: string): string {
   return `${vulnId}::${packageName}`;
+}
+
+export function remediationActionKeyForDirectOperation(operationId: string): string {
+  return `direct:${operationId}`;
+}
+
+export function remediationActionKeyForOverrideChange(operationId: string, changeIndex: number): string {
+  return `override:${operationId}:${changeIndex}`;
 }
 
 function scopeToText(scope: RemediationScopeSelector): string {
@@ -42,7 +63,10 @@ function addAction(lookup: Map<string, RemediationAction[]>, key: string, action
 
 export function buildRemediationActionLookup(
   result: ScanResult,
-  remediationPlan?: RemediationPlan
+  remediationPlan?: RemediationPlan,
+  options: {
+    replacementByActionKey?: Map<string, RemediationReplacement[]>;
+  } = {}
 ): Map<string, RemediationAction[]> {
   const lookup = new Map<string, RemediationAction[]>();
   if (!remediationPlan) {
@@ -59,7 +83,8 @@ export function buildRemediationActionLookup(
 
       const action: RemediationAction = {
         description: `Upgrade direct dependency ${operation.package} from ${operation.fromRange} to ${operation.toRange} in ${operation.file}.`,
-        file: operation.file
+        file: operation.file,
+        replacements: options.replacementByActionKey?.get(remediationActionKeyForDirectOperation(operation.id))
       };
       for (const vulnId of vulnIds) {
         addAction(lookup, remediationLookupKey(vulnId, operation.package), action);
@@ -68,7 +93,7 @@ export function buildRemediationActionLookup(
     }
 
     if (operation.kind === "manifest-override") {
-      for (const change of operation.changes) {
+      for (const [changeIndex, change] of operation.changes.entries()) {
         const vulnIds = referencedVulnIds(change.why, knownVulnIds);
         if (vulnIds.length === 0) {
           continue;
@@ -76,7 +101,10 @@ export function buildRemediationActionLookup(
 
         const action: RemediationAction = {
           description: `Update ${change.package} override to ${change.to} (scope: ${scopeToText(change.scope)}) in ${operation.file}.`,
-          file: operation.file
+          file: operation.file,
+          replacements: options.replacementByActionKey?.get(
+            remediationActionKeyForOverrideChange(operation.id, changeIndex)
+          )
         };
         for (const vulnId of vulnIds) {
           addAction(lookup, remediationLookupKey(vulnId, change.package), action);

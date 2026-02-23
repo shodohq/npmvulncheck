@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { ScanResult } from "../src/core/types";
 import { renderJson } from "../src/report/json";
 import { renderOpenVex } from "../src/report/openvex";
 import { renderSarif } from "../src/report/sarif";
 import { RemediationPlan } from "../src/remediation/types";
+import { cleanupTempDirs, makeTempDir } from "./helpers";
 
 function makeResult(reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" }): ScanResult {
   return {
@@ -85,7 +88,52 @@ function makeRemediationPlan(): RemediationPlan {
   };
 }
 
+function makeOverrideRemediationPlan(): RemediationPlan {
+  return {
+    tool: "npmvulncheck",
+    strategy: "override",
+    packageManager: "npm",
+    target: {
+      onlyReachable: false,
+      includeDev: false
+    },
+    operations: [
+      {
+        id: "op-manifest-override-1",
+        kind: "manifest-override",
+        manager: "npm",
+        file: "package.json",
+        changes: [
+          {
+            package: "pkg",
+            to: "1.2.0",
+            scope: "global",
+            why: "Fixes GHSA-test"
+          }
+        ]
+      }
+    ],
+    fixes: {
+      fixedVulnerabilities: ["GHSA-test"],
+      remainingVulnerabilities: []
+    },
+    summary: {
+      reasonedTopChoices: [
+        {
+          opId: "op-manifest-override-1",
+          rationale: "fixture",
+          risk: "low"
+        }
+      ]
+    }
+  };
+}
+
 describe("report renderers", () => {
+  afterEach(async () => {
+    await cleanupTempDirs();
+  });
+
   it("renders SARIF with required top-level fields", () => {
     const parsed = JSON.parse(renderSarif(makeResult({ reachable: true, level: "import" }))) as {
       version: string;
@@ -98,13 +146,31 @@ describe("report renderers", () => {
     expect(parsed.runs[0].results.length).toBeGreaterThan(0);
   });
 
-  it("renders SARIF fixes when a remediation plan is supplied", () => {
+  it("renders SARIF fixes when a remediation plan is supplied", async () => {
     const result = makeResult({ reachable: true, level: "import" });
     const plan = makeRemediationPlan();
+    const root = await makeTempDir("npmvulncheck-sarif-fix-description-");
+    const packageJsonPath = path.join(root, "package.json");
+    await fs.writeFile(
+      packageJsonPath,
+      `${JSON.stringify(
+        {
+          name: "fixture",
+          version: "1.0.0",
+          dependencies: {
+            pkg: "1.0.0"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
 
     const parsed = JSON.parse(
       renderSarif(result, {
-        remediationPlan: plan
+        remediationPlan: plan,
+        projectRoot: root
       })
     ) as {
       runs: Array<{ results: Array<{ fixes?: Array<{ description: { text: string } }> }> }>;
@@ -112,6 +178,112 @@ describe("report renderers", () => {
 
     expect(parsed.runs[0].results[0].fixes?.length).toBeGreaterThan(0);
     expect(parsed.runs[0].results[0].fixes?.[0]?.description.text).toContain("Upgrade direct dependency pkg");
+  });
+
+  it("renders SARIF fix replacements with populated insertedContent/deletedRegion", async () => {
+    const root = await makeTempDir("npmvulncheck-sarif-fix-");
+    const packageJsonPath = path.join(root, "package.json");
+    await fs.writeFile(
+      packageJsonPath,
+      `${JSON.stringify(
+        {
+          name: "fixture",
+          version: "1.0.0",
+          dependencies: {
+            pkg: "1.0.0"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const parsed = JSON.parse(
+      renderSarif(makeResult({ reachable: true, level: "import" }), {
+        remediationPlan: makeRemediationPlan(),
+        projectRoot: root
+      })
+    ) as {
+      runs: Array<{
+        results: Array<{
+          fixes?: Array<{
+            artifactChanges: Array<{
+              replacements: Array<{
+                deletedRegion: {
+                  startLine: number;
+                  startColumn: number;
+                  endLine?: number;
+                  endColumn: number;
+                };
+                insertedContent: {
+                  text: string;
+                };
+              }>;
+            }>;
+          }>;
+        }>;
+      }>;
+    };
+
+    const replacement = parsed.runs[0].results[0].fixes?.[0]?.artifactChanges[0]?.replacements[0];
+    expect(replacement?.insertedContent.text).toBe('"1.2.0"');
+    expect(replacement?.deletedRegion.startLine).toBeGreaterThan(1);
+    expect(replacement?.deletedRegion.endLine).toBe(replacement?.deletedRegion.startLine);
+    expect(replacement?.deletedRegion.endColumn).toBeGreaterThan(replacement?.deletedRegion.startColumn ?? 0);
+  });
+
+  it("renders SARIF override fix as local insertion instead of whole-file replacement", async () => {
+    const root = await makeTempDir("npmvulncheck-sarif-override-fix-");
+    const packageJsonPath = path.join(root, "package.json");
+    await fs.writeFile(
+      packageJsonPath,
+      `${JSON.stringify(
+        {
+          name: "fixture",
+          version: "1.0.0",
+          dependencies: {
+            pkg: "1.0.0"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const parsed = JSON.parse(
+      renderSarif(makeResult({ reachable: true, level: "import" }), {
+        remediationPlan: makeOverrideRemediationPlan(),
+        projectRoot: root
+      })
+    ) as {
+      runs: Array<{
+        results: Array<{
+          fixes?: Array<{
+            artifactChanges: Array<{
+              replacements: Array<{
+                deletedRegion: {
+                  startLine: number;
+                  startColumn: number;
+                  endLine?: number;
+                  endColumn: number;
+                };
+                insertedContent: {
+                  text: string;
+                };
+              }>;
+            }>;
+          }>;
+        }>;
+      }>;
+    };
+
+    const replacement = parsed.runs[0].results[0].fixes?.[0]?.artifactChanges[0]?.replacements[0];
+    expect(replacement?.insertedContent.text).toContain('"overrides"');
+    expect(replacement?.insertedContent.text).toContain('"pkg": "1.2.0"');
+    expect(replacement?.deletedRegion.startLine).toBe(replacement?.deletedRegion.endLine);
+    expect(replacement?.deletedRegion.startColumn).toBe(replacement?.deletedRegion.endColumn);
   });
 
   it("renders JSON remediation payload and fix note when remediation plan is supplied", () => {

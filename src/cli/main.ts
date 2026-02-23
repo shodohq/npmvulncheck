@@ -21,7 +21,10 @@ function renderResult(result: ScanResult, opts: ScanOptions, remediationPlan: Re
     case "json":
       return renderJson(result, { remediationPlan });
     case "sarif":
-      return renderSarif(result, { remediationPlan });
+      return renderSarif(result, {
+        remediationPlan,
+        projectRoot: opts.root
+      });
     case "openvex":
       return renderOpenVex(result, { remediationPlan });
     case "text":
@@ -186,7 +189,7 @@ program
   .version(packageJson.version, "--version", "Show version")
   .option("--mode <mode>", "scan mode: lockfile|installed|source", "lockfile")
   .option("--format <format>", "output format: text|json|sarif|openvex", "text")
-  .option("--strategy <strategy>", "remediation strategy: override|direct|in-place|auto", "auto")
+  .option("--strategy <strategy>", "remediation strategy: override|direct|in-place(alias:auto)|auto", "auto")
   .option("--scope <scope>", "remediation scope: global|by-parent", "global")
   .option("--upgrade-level <level>", "remediation upgrade level: patch|minor|major|any", "any")
   .option("--only-reachable", "plan remediation only for reachable findings")

@@ -324,7 +324,7 @@ export function buildOverridePlan(input: OverrideStrategyInput): RemediationPlan
   }
   if (directOnlyVulns.size > 0) {
     summaryLines.push(
-      `${directOnlyVulns.size} vulnerability record(s) include direct dependencies and were left for a future direct strategy.`
+      `${directOnlyVulns.size} vulnerability record(s) include direct dependencies and remain unresolved under override strategy.`
     );
   }
 
