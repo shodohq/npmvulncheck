@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ScanResult } from "../core/types";
+import { FindingPriority, ScanResult } from "../core/types";
 import { RemediationPlan } from "../remediation/types";
 import { buildRemediationActionLookup, remediationLookupKey } from "./remediation";
 
@@ -18,6 +18,13 @@ function statusForAffected(
   return "affected";
 }
 
+function priorityStatusNotes(priority: FindingPriority | undefined): string | undefined {
+  if (!priority) {
+    return undefined;
+  }
+  return `priority=${priority.level}; reason=${priority.reason}; score=${priority.score}`;
+}
+
 export type RenderOpenVexOptions = {
   remediationPlan?: RemediationPlan;
 };
@@ -27,6 +34,7 @@ export function renderOpenVex(result: ScanResult, options: RenderOpenVexOptions 
   const statements = result.findings.flatMap((finding) =>
     finding.affected.map((affected) => {
       const actions = actionsByFindingAndPackage.get(remediationLookupKey(finding.vulnId, affected.package.name));
+      const statusNotes = priorityStatusNotes(finding.priority);
       const actionStatement =
         actions && actions.length > 0
           ? actions.map((action) => action.description).join(" ")
@@ -48,6 +56,7 @@ export function renderOpenVex(result: ScanResult, options: RenderOpenVexOptions 
           affected.reachability?.reachable === false && affected.reachability.level !== "unknown"
             ? "vulnerable_code_not_in_execute_path"
             : undefined,
+        status_notes: statusNotes,
         action_statement: actionStatement,
         timestamp: result.meta.timestamp
       };

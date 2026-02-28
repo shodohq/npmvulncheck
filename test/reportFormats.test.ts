@@ -1,12 +1,37 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ScanResult } from "../src/core/types";
+import { FindingPriority, ScanResult } from "../src/core/types";
 import { renderJson } from "../src/report/json";
 import { renderOpenVex } from "../src/report/openvex";
 import { renderSarif } from "../src/report/sarif";
 import { RemediationPlan } from "../src/remediation/types";
 import { cleanupTempDirs, makeTempDir } from "./helpers";
+
+function priorityForReachability(reachability: {
+  reachable: boolean;
+  level: "import" | "transitive" | "unknown";
+}): FindingPriority {
+  if (reachability.reachable) {
+    return {
+      level: "high",
+      reason: "reachable",
+      score: 30
+    };
+  }
+  if (reachability.level === "unknown") {
+    return {
+      level: "medium",
+      reason: "unknown-reachability",
+      score: 20
+    };
+  }
+  return {
+    level: "low",
+    reason: "unreachable",
+    score: 10
+  };
+}
 
 function makeResult(reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" }): ScanResult {
   return {
@@ -44,6 +69,7 @@ function makeResult(reachability: { reachable: boolean; level: "import" | "trans
             }
           }
         ],
+        priority: priorityForReachability(reachability),
         references: [{ type: "ADVISORY", url: "https://example.test/advisory" }]
       }
     ],
@@ -137,13 +163,18 @@ describe("report renderers", () => {
   it("renders SARIF with required top-level fields", () => {
     const parsed = JSON.parse(renderSarif(makeResult({ reachable: true, level: "import" }))) as {
       version: string;
-      runs: Array<{ tool: { driver: { rules: Array<{ id: string }> } }; results: unknown[] }>;
+      runs: Array<{
+        tool: { driver: { rules: Array<{ id: string; properties?: { priority_level?: string } }> } };
+        results: Array<{ properties?: { priority_level?: string } }>;
+      }>;
     };
 
     expect(parsed.version).toBe("2.1.0");
     expect(parsed.runs).toHaveLength(1);
     expect(parsed.runs[0].tool.driver.rules[0].id).toBe("GHSA-test");
+    expect(parsed.runs[0].tool.driver.rules[0].properties?.priority_level).toBe("high");
     expect(parsed.runs[0].results.length).toBeGreaterThan(0);
+    expect(parsed.runs[0].results[0].properties?.priority_level).toBe("high");
   });
 
   it("renders SARIF fixes when a remediation plan is supplied", async () => {
@@ -294,10 +325,15 @@ describe("report renderers", () => {
       })
     ) as {
       remediation?: { strategy?: string };
-      findings: Array<{ affected: Array<{ fix?: { note?: string } }> }>;
+      findings: Array<{
+        priority?: { level?: string; reason?: string; score?: number };
+        affected: Array<{ fix?: { note?: string } }>;
+      }>;
     };
 
     expect(parsed.remediation?.strategy).toBe("auto");
+    expect(parsed.findings[0].priority?.level).toBe("high");
+    expect(parsed.findings[0].priority?.reason).toBe("reachable");
     expect(parsed.findings[0].affected[0].fix?.note).toContain("Upgrade direct dependency pkg");
   });
 
@@ -307,29 +343,35 @@ describe("report renderers", () => {
         remediationPlan: makeRemediationPlan()
       })
     ) as {
-      statements: Array<{ action_statement?: string }>;
+      statements: Array<{ action_statement?: string; status_notes?: string }>;
     };
 
     expect(parsed.statements[0].action_statement).toContain("Upgrade direct dependency pkg");
+    expect(parsed.statements[0].status_notes).toContain("priority=high");
+    expect(parsed.statements[0].status_notes).toContain("reason=reachable");
   });
 
   it("renders OpenVEX not_affected with justification for unreachable findings", () => {
     const parsed = JSON.parse(renderOpenVex(makeResult({ reachable: false, level: "transitive" }))) as {
-      statements: Array<{ status: string; justification?: string }>;
+      statements: Array<{ status: string; justification?: string; status_notes?: string }>;
     };
 
     expect(parsed.statements).toHaveLength(1);
     expect(parsed.statements[0].status).toBe("not_affected");
     expect(parsed.statements[0].justification).toBe("vulnerable_code_not_in_execute_path");
+    expect(parsed.statements[0].status_notes).toContain("priority=low");
+    expect(parsed.statements[0].status_notes).toContain("reason=unreachable");
   });
 
   it("renders OpenVEX under_investigation when reachability is unknown", () => {
     const parsed = JSON.parse(renderOpenVex(makeResult({ reachable: false, level: "unknown" }))) as {
-      statements: Array<{ status: string; justification?: string }>;
+      statements: Array<{ status: string; justification?: string; status_notes?: string }>;
     };
 
     expect(parsed.statements).toHaveLength(1);
     expect(parsed.statements[0].status).toBe("under_investigation");
     expect(parsed.statements[0].justification).toBeUndefined();
+    expect(parsed.statements[0].status_notes).toContain("priority=medium");
+    expect(parsed.statements[0].status_notes).toContain("reason=unknown-reachability");
   });
 });

@@ -87,7 +87,7 @@ npmvulncheck --mode source --format json > findings.json
 |-------------|------------------------------|----------------------------------|-------|
 | `lockfile`  | lockfile dependency graph      | Fast, deterministic CI scans      | Supports npm/pnpm/yarn lockfiles |
 | `installed` | actual `node_modules` tree     | Match what is actually installed  | npm installed tree only |
-| `source`    | lockfile + source imports      | Prioritize reachable dependencies | Falls back to full inventory when imports are unresolved |
+| `source`    | lockfile + source imports      | Prioritize reachable findings     | Keeps non-reachable findings at lower priority; unresolved imports remain `unknown` |
 
 ### Entry points in `source` mode
 
@@ -152,6 +152,13 @@ Output mapping:
 - `json`: remediation plan is emitted as top-level `remediation`, and per-affected notes are merged into `findings[].affected[].fix.note`
 - `openvex`: remediation actions are emitted in `statements[].action_statement`
 - `text`: remediation actions are shown in each finding's `fix:` line
+
+Priority mapping:
+
+- `text`: each finding header includes `priority:<level>`
+- `json`: each finding includes `findings[].priority`
+- `sarif`: each rule/result includes `properties.priority_level`, `properties.priority_reason`, `properties.priority_score`
+- `openvex`: each statement includes `status_notes` with priority/reason/score
 
 ## Exit codes and CI behavior
 
@@ -224,7 +231,7 @@ npmvulncheck --root examples/guided-remediation --strategy auto --format text
 
 ### Source reachability
 
-`examples/complex-unused-deps` demonstrates how `source` mode can reduce findings from dependencies that exist in the lockfile but are not reachable from your entrypoint.
+`examples/complex-unused-deps` demonstrates how `source` mode can prioritize dependencies that are reachable from your entrypoint while lowering the priority of non-reachable findings.
 
 ```bash
 npmvulncheck --root examples/complex-unused-deps --mode lockfile --format text

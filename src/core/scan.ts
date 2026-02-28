@@ -1,6 +1,7 @@
 import { computeReachability } from "../reachability/propagate";
 import { includeNodeByDependencyType, passesSeverityThreshold } from "../policy/filters";
 import { isIgnored, loadIgnorePolicy } from "../policy/ignore";
+import { compareFindingsByPriority, evaluateFindingPriority } from "../policy/priority";
 import { VulnerabilityProvider } from "../osv/provider";
 import { DependencyGraphProvider } from "../deps/provider";
 import {
@@ -23,8 +24,7 @@ function packageKey(name: string, version: string): string {
 
 function dedupeInventory(
   graph: DepGraph,
-  includeDev: boolean,
-  reachableNodeIds?: Set<string>
+  includeDev: boolean
 ): {
   inventory: Array<{ name: string; version: string }>;
   packageToNodes: Map<string, PackageNode[]>;
@@ -37,9 +37,6 @@ function dedupeInventory(
       continue;
     }
     if (node.source && node.source !== "registry") {
-      continue;
-    }
-    if (reachableNodeIds && !reachableNodeIds.has(node.id)) {
       continue;
     }
     if (!includeNodeByDependencyType(node, includeDev)) {
@@ -292,7 +289,8 @@ async function getFixSuggestion(
 function toReachability(
   nodeId: string,
   reachabilityResult: ReachabilityRecord | undefined,
-  mode: ScanOptions["mode"]
+  mode: ScanOptions["mode"],
+  hasCompleteSourceCoverage: boolean
 ): Reachability | undefined {
   if (mode !== "source") {
     return undefined;
@@ -301,7 +299,7 @@ function toReachability(
   if (!reachabilityResult) {
     return {
       reachable: false,
-      level: "unknown",
+      level: hasCompleteSourceCoverage ? "transitive" : "unknown",
       evidences: [],
       traces: [[`unreachable:${nodeId}`]]
     };
@@ -450,24 +448,12 @@ export async function runScan(
         })
       : undefined;
 
-  let reachableNodeIds: Set<string> | undefined;
-  if (opts.mode === "source") {
-    const resolved = Array.from(reachability?.byNodeId.keys() ?? []);
-    const hasUnknownImports = Boolean(reachability?.hasUnknownImports);
-    const entriesScanned = reachability?.entriesScanned ?? 0;
+  const hasCompleteSourceCoverage =
+    opts.mode === "source" &&
+    (reachability?.entriesScanned ?? 0) > 0 &&
+    !Boolean(reachability?.hasUnknownImports);
 
-    if (entriesScanned === 0 || hasUnknownImports) {
-      // If source analysis has unresolved signals, fall back to full inventory to avoid false negatives.
-      reachableNodeIds = undefined;
-    } else if (resolved.length > 0) {
-      reachableNodeIds = new Set(resolved);
-    } else {
-      // No package imports were observed and analysis was complete.
-      reachableNodeIds = new Set();
-    }
-  }
-
-  const { inventory, packageToNodes } = dedupeInventory(graph, opts.includeDev, reachableNodeIds);
+  const { inventory, packageToNodes } = dedupeInventory(graph, opts.includeDev);
   const matchesByPackage = await vulnProvider.queryPackages(inventory);
   const ignorePolicy = await loadIgnorePolicy(opts.root, opts.ignoreFile);
 
@@ -511,7 +497,7 @@ export async function runScan(
           paths = findDependencyPaths(graph, node.id);
           dependencyPathCache.set(node.id, paths);
         }
-        const reach = toReachability(node.id, reachability?.byNodeId.get(node.id), opts.mode);
+        const reach = toReachability(node.id, reachability?.byNodeId.get(node.id), opts.mode, hasCompleteSourceCoverage);
         mergeAffected(finding, node, paths, reach, fix);
       }
     }
@@ -519,7 +505,11 @@ export async function runScan(
 
   let findings = Array.from(findingById.values()).filter((finding) => passesSeverityThreshold(finding, opts.severityThreshold));
 
-  findings = findings.sort((a, b) => a.vulnId.localeCompare(b.vulnId));
+  for (const finding of findings) {
+    finding.priority = evaluateFindingPriority(finding, opts.mode);
+  }
+
+  findings = findings.sort(compareFindingsByPriority);
 
   const meta: ScanMeta = {
     tool: {

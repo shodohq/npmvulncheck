@@ -15,6 +15,18 @@ function formatTrace(trace: string[]): string {
   return trace.join(" -> ");
 }
 
+function summarizeReachability(
+  reachability: { reachable: boolean; level: "import" | "transitive" | "unknown" }
+): string {
+  if (reachability.reachable) {
+    return "reachable";
+  }
+  if (reachability.level === "unknown") {
+    return "unknown";
+  }
+  return "unreachable";
+}
+
 function appendUnresolvedImports(lines: string[], result: ScanResult, showVerbose: boolean): void {
   const unresolvedImports = result.meta.sourceAnalysis?.unresolvedImports ?? [];
   if (unresolvedImports.length === 0) {
@@ -69,15 +81,14 @@ export function renderText(
   }
 
   for (const finding of result.findings) {
-    lines.push(`${finding.vulnId}  ${summarizeSeverity(finding)}  ${finding.summary || "(no summary)"}`);
+    const priorityLabel = finding.priority ? `  priority:${finding.priority.level}` : "";
+    lines.push(`${finding.vulnId}  ${summarizeSeverity(finding)}${priorityLabel}  ${finding.summary || "(no summary)"}`);
 
     for (const affected of finding.affected) {
       lines.push(`  package: ${affected.package.name}@${affected.package.version} (${affected.package.location || affected.package.id})`);
 
       if (affected.reachability) {
-        lines.push(
-          `  reachability: ${affected.reachability.reachable ? "reachable" : "unknown"} (${affected.reachability.level})`
-        );
+        lines.push(`  reachability: ${summarizeReachability(affected.reachability)} (${affected.reachability.level})`);
       }
 
       if (showTraces && affected.reachability?.traces && affected.reachability.traces.length > 0) {

@@ -105,7 +105,7 @@ afterEach(async () => {
 });
 
 describe("runScan source mode", () => {
-  it("queries and reports only reachable packages", async () => {
+  it("keeps unreachable findings but places them at lower priority", async () => {
     const tempDir = await makeTempDir("npmvulncheck-scan-source-");
     const srcDir = path.join(tempDir, "src");
     await fs.mkdir(srcDir, { recursive: true });
@@ -115,9 +115,20 @@ describe("runScan source mode", () => {
     const vulns = new FakeVulnProvider();
     const result = await runScan(makeOptions(tempDir), deps, vulns, "0.1.0");
 
-    expect(vulns.queryCalls.map((pkg) => pkg.name).sort()).toEqual(["pkg-a", "pkg-c"]);
-    expect(result.findings.map((finding) => finding.vulnId).sort()).toEqual(["GHSA-pkg-a", "GHSA-pkg-c"]);
-    expect(result.findings.some((finding) => finding.vulnId === "GHSA-pkg-b")).toBe(false);
+    expect(vulns.queryCalls.map((pkg) => pkg.name).sort()).toEqual(["pkg-a", "pkg-b", "pkg-c"]);
+    expect(result.findings.map((finding) => finding.vulnId).sort()).toEqual([
+      "GHSA-pkg-a",
+      "GHSA-pkg-b",
+      "GHSA-pkg-c"
+    ]);
+
+    const byId = new Map(result.findings.map((finding) => [finding.vulnId, finding]));
+    expect(byId.get("GHSA-pkg-a")?.priority?.level).toBe("high");
+    expect(byId.get("GHSA-pkg-c")?.priority?.level).toBe("high");
+    expect(byId.get("GHSA-pkg-b")?.priority?.level).toBe("low");
+    expect(byId.get("GHSA-pkg-b")?.affected[0].reachability?.level).toBe("transitive");
+    expect(byId.get("GHSA-pkg-b")?.affected[0].reachability?.reachable).toBe(false);
+    expect(result.findings[result.findings.length - 1]?.vulnId).toBe("GHSA-pkg-b");
   });
 
   it("falls back to full inventory when source analysis has only unknown imports", async () => {
@@ -136,6 +147,10 @@ describe("runScan source mode", () => {
       "GHSA-pkg-b",
       "GHSA-pkg-c"
     ]);
+
+    const pkgBFinding = result.findings.find((finding) => finding.vulnId === "GHSA-pkg-b");
+    expect(pkgBFinding?.priority?.level).toBe("medium");
+    expect(pkgBFinding?.affected[0].reachability?.level).toBe("unknown");
   });
 
   it("falls back to full inventory when at least one import cannot be resolved", async () => {
@@ -154,6 +169,10 @@ describe("runScan source mode", () => {
       "GHSA-pkg-b",
       "GHSA-pkg-c"
     ]);
+
+    const pkgBFinding = result.findings.find((finding) => finding.vulnId === "GHSA-pkg-b");
+    expect(pkgBFinding?.priority?.level).toBe("medium");
+    expect(pkgBFinding?.affected[0].reachability?.level).toBe("unknown");
   });
 
   it("includes unresolved import diagnostics when explain-resolve is enabled", async () => {

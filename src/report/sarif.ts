@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { ScanResult } from "../core/types";
+import { FindingPriority, ScanResult } from "../core/types";
 import { findingHighestSeverityLevel } from "../policy/severity";
 import { getManifestOverrideProvider } from "../remediation/providers";
 import { RemediationOperation, RemediationPlan } from "../remediation/types";
@@ -65,6 +65,18 @@ function severityToSarifLevel(level?: "low" | "medium" | "high" | "critical"): "
     return "warning";
   }
   return "note";
+}
+
+function priorityProperties(priority: FindingPriority | undefined): Record<string, string | number> | undefined {
+  if (!priority) {
+    return undefined;
+  }
+
+  return {
+    priority_level: priority.level,
+    priority_reason: priority.reason,
+    priority_score: priority.score
+  };
 }
 
 function getRootObjectNode(sourceFile: ts.JsonSourceFile): ts.ObjectLiteralExpression | undefined {
@@ -461,18 +473,27 @@ export function renderSarif(result: ScanResult, options: RenderSarifOptions = {}
   const actionsByFindingAndPackage = buildRemediationActionLookup(result, options.remediationPlan, {
     replacementByActionKey
   });
-  const rules = result.findings.map((finding) => ({
-    id: finding.vulnId,
-    shortDescription: {
-      text: finding.summary
-    },
-    helpUri: finding.references[0]?.url
-  }));
+  const rules = result.findings.map((finding) => {
+    const properties = priorityProperties(finding.priority);
+    return {
+      id: finding.vulnId,
+      shortDescription: {
+        text: finding.summary
+      },
+      helpUri: finding.references[0]?.url,
+      ...(properties
+        ? {
+            properties
+          }
+        : {})
+    };
+  });
 
   const sarifResults = result.findings.flatMap((finding) =>
     finding.affected.map((affected) => {
       const key = remediationLookupKey(finding.vulnId, affected.package.name);
       const actions = actionsByFindingAndPackage.get(key);
+      const properties = priorityProperties(finding.priority);
       const baseResult = {
         ruleId: finding.vulnId,
         level: severityToSarifLevel(findingHighestSeverityLevel(finding)),
@@ -491,7 +512,12 @@ export function renderSarif(result: ScanResult, options: RenderSarifOptions = {}
               }
             }
           }
-        ]
+        ],
+        ...(properties
+          ? {
+              properties
+            }
+          : {})
       };
 
       if (!actions || actions.length === 0) {

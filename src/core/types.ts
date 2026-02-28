@@ -65,6 +65,16 @@ export type FixSuggestion = {
   note?: string;
 };
 
+export type FindingPriorityLevel = "high" | "medium" | "low";
+
+export type FindingPriorityReason = "reachable" | "unknown-reachability" | "unreachable" | "severity";
+
+export type FindingPriority = {
+  level: FindingPriorityLevel;
+  reason: FindingPriorityReason;
+  score: number;
+};
+
 export type Finding = {
   vulnId: string;
   aliases: string[];
@@ -80,6 +90,7 @@ export type Finding = {
     reachability?: Reachability;
     fix?: FixSuggestion;
   }[];
+  priority?: FindingPriority;
   references: { type: string; url: string }[];
   modified?: string;
   published?: string;
