@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { Command } from "commander";
 import packageJson from "../../package.json";
 import { resolveScanOptions, collect } from "./args";
@@ -15,6 +16,14 @@ import { ScanOptions, ScanResult } from "../core/types";
 import { determineExitCode } from "./exitCode";
 import { buildRemediationPlan } from "../remediation";
 import { RemediationPlan, RemediationScope, RemediationStrategy, UpgradeLevel } from "../remediation/types";
+
+function writeStdout(text: string): void {
+  fs.writeSync(process.stdout.fd, text);
+}
+
+function writeStderr(text: string): void {
+  fs.writeSync(process.stderr.fd, text);
+}
 
 function renderResult(result: ScanResult, opts: ScanOptions, remediationPlan: RemediationPlan): string {
   switch (opts.format) {
@@ -115,7 +124,7 @@ async function detectOrThrow(registry: ProviderRegistry, opts: ScanOptions): Pro
   if (Array.isArray(warnings)) {
     for (const warning of warnings) {
       if (typeof warning === "string" && warning.length > 0) {
-        process.stderr.write(`Warning: ${warning}\n`);
+        writeStderr(`Warning: ${warning}\n`);
       }
     }
   }
@@ -161,7 +170,7 @@ async function runDefaultScan(raw: Record<string, unknown>): Promise<void> {
     depsProvider.load(opts.root, detectMode)
   ]);
   const remediationPlan = buildScanRemediationPlan(result, graph, detected.manager, opts, remediationOptions);
-  process.stdout.write(renderResult(result, opts, remediationPlan));
+  writeStdout(renderResult(result, opts, remediationPlan));
   process.exitCode = determineExitCode(result, opts);
 }
 
@@ -175,14 +184,22 @@ async function runExplain(vulnId: string, options: { cacheDir?: string; offline?
   const vuln = await provider.getVuln(vulnId);
 
   if (options.format === "json") {
-    process.stdout.write(`${JSON.stringify(vuln, null, 2)}\n`);
+    writeStdout(`${JSON.stringify(vuln, null, 2)}\n`);
     return;
   }
 
-  process.stdout.write(renderExplainText(vuln));
+  writeStdout(renderExplainText(vuln));
 }
 
 const program = new Command();
+program.configureOutput({
+  writeOut: (str: string) => {
+    writeStdout(str);
+  },
+  writeErr: (str: string) => {
+    writeStderr(str);
+  }
+});
 program
   .name("npmvulncheck")
   .description("govulncheck-compatible vulnerability scanner for npm")
@@ -232,7 +249,7 @@ program
   .action(async (options) => {
     const cache = new OsvCache(options.cacheDir);
     const summary = await cache.getVulnSummary();
-    process.stdout.write(
+    writeStdout(
       [
         `npmvulncheck ${packageJson.version}`,
         "db: osv",
@@ -245,6 +262,6 @@ program
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`Error: ${message}\n`);
+  writeStderr(`Error: ${message}\n`);
   process.exitCode = 2;
 });
